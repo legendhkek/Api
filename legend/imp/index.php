@@ -218,6 +218,118 @@ function get_supported_gateways(): array
 }
 
 /**
+ * Derive dashboard status summary and actionable alerts.
+ *
+ * @param array $proxySummary Proxy summary data.
+ * @param int|null $lastHealthEpoch Last health check timestamp.
+ * @param string $baseUrl Base dashboard URL for generating CTA links.
+ * @return array{overall:string,proxyAgeSeconds:?int,healthAgeSeconds:?int,alerts:array<int,array<string,mixed>>}
+ */
+function assess_dashboard_status(array $proxySummary, ?int $lastHealthEpoch, string $baseUrl): array
+{
+    $now = time();
+    $alerts = [];
+    $maxSeverityWeight = 0;
+
+    $severityWeight = [
+        'info' => 1,
+        'warning' => 2,
+        'critical' => 3,
+    ];
+
+    $proxyAgeSeconds = $proxySummary['lastUpdated'] ? max(0, $now - $proxySummary['lastUpdated']) : null;
+    $healthAgeSeconds = $lastHealthEpoch ? max(0, $now - $lastHealthEpoch) : null;
+
+    if ($proxySummary['total'] === 0) {
+        $alerts[] = [
+            'severity' => 'critical',
+            'title' => 'No proxies available',
+            'message' => 'ProxyList.txt is empty. Fetch new proxies to restore service.',
+            'cta' => [
+                'label' => 'Fetch Proxies',
+                'url' => $baseUrl . 'fetch_proxies.php',
+            ],
+        ];
+        $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['critical']);
+    } elseif ($proxyAgeSeconds === null) {
+        $alerts[] = [
+            'severity' => 'warning',
+            'title' => 'Proxy list status unknown',
+            'message' => 'ProxyList.txt has not been updated yet. Run a fetch to populate the list.',
+            'cta' => [
+                'label' => 'Open Proxy Manager',
+                'url' => $baseUrl . 'index.php#proxies',
+            ],
+        ];
+        $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['warning']);
+    } else {
+        if ($proxyAgeSeconds > 3600 && $proxyAgeSeconds <= 21600) {
+            $alerts[] = [
+                'severity' => 'warning',
+                'title' => 'Proxy list going stale',
+                'message' => 'Proxies have not been refreshed in over an hour. Consider running an update.',
+                'cta' => [
+                    'label' => 'Force Refresh',
+                    'url' => $baseUrl . 'proxy_cache_refresh.php?auto=1',
+                ],
+            ];
+            $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['warning']);
+        } elseif ($proxyAgeSeconds > 21600) {
+            $alerts[] = [
+                'severity' => 'critical',
+                'title' => 'Proxy list outdated',
+                'message' => 'Proxies are older than 6 hours. Service quality may be impacted.',
+                'cta' => [
+                    'label' => 'Fetch Proxies Now',
+                    'url' => $baseUrl . 'fetch_proxies.php',
+                ],
+            ];
+            $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['critical']);
+        }
+    }
+
+    if ($lastHealthEpoch === null) {
+        $alerts[] = [
+            'severity' => 'info',
+            'title' => 'Health check pending',
+            'message' => 'A system health check has not been recorded yet.',
+            'cta' => [
+                'label' => 'Run Health Check',
+                'url' => $baseUrl . 'health.php',
+            ],
+        ];
+        $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['info']);
+    } elseif ($healthAgeSeconds !== null && $healthAgeSeconds > 7200) {
+        $alerts[] = [
+            'severity' => 'warning',
+            'title' => 'Health check overdue',
+            'message' => 'Last health check was over 2 hours ago. Run diagnostics to validate stability.',
+            'cta' => [
+                'label' => 'View Health Report',
+                'url' => $baseUrl . 'health.php',
+            ],
+        ];
+        $maxSeverityWeight = max($maxSeverityWeight, $severityWeight['warning']);
+    }
+
+    $overall = 'operational';
+    if ($maxSeverityWeight >= $severityWeight['critical']) {
+        $overall = 'critical';
+    } elseif ($maxSeverityWeight === $severityWeight['warning']) {
+        $overall = 'degraded';
+    } elseif ($maxSeverityWeight === $severityWeight['info']) {
+        $overall = 'observing';
+    }
+
+    return [
+        'overall' => $overall,
+        'proxyAgeSeconds' => $proxyAgeSeconds,
+        'healthAgeSeconds' => $healthAgeSeconds,
+        'alerts' => $alerts,
+    ];
+}
+
+/**
  * Build the dashboard dataset used by the UI and the JSON endpoint.
  *
  * @return array Dashboard data.
@@ -229,6 +341,7 @@ function get_dashboard_data(): array
     $lastHealthEpoch = is_file($healthCache) ? (int) trim((string) file_get_contents($healthCache)) : null;
 
     $base = dashboard_base_url();
+    $status = assess_dashboard_status($proxySummary, $lastHealthEpoch, $base);
 
     return [
         'generatedAt' => date(DATE_ATOM),
@@ -264,6 +377,12 @@ function get_dashboard_data(): array
             'proxyExample' => $base . 'proxy_example.php',
         ],
         'gateways' => get_supported_gateways(),
+        'status' => [
+            'overall' => $status['overall'],
+            'proxyAgeSeconds' => $status['proxyAgeSeconds'],
+            'healthAgeSeconds' => $status['healthAgeSeconds'],
+        ],
+        'alerts' => $status['alerts'],
     ];
 }
 
@@ -285,6 +404,27 @@ function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+
+$generatedAtTs = isset($dashboard['generatedAt']) ? strtotime($dashboard['generatedAt']) : time();
+if ($generatedAtTs === false) {
+    $generatedAtTs = time();
+}
+
+$overallState = $dashboard['status']['overall'] ?? 'operational';
+$statusClassMap = [
+    'operational' => 'status-ok',
+    'observing' => 'status-info',
+    'degraded' => 'status-warning',
+    'critical' => 'status-critical',
+];
+$statusLabelMap = [
+    'operational' => 'Operational',
+    'observing' => 'Monitoring',
+    'degraded' => 'Degraded',
+    'critical' => 'Attention Required',
+];
+$overallStatusClass = $statusClassMap[$overallState] ?? 'status-info';
+$overallStatusLabel = $statusLabelMap[$overallState] ?? ucfirst($overallState);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -422,6 +562,193 @@ function h($value): string
         .status.teal { background: #14b8a6; box-shadow: 0 4px 15px rgba(20, 184, 166, 0.3); }
         .status.blue { background: var(--info); box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
         .status.purple { background: var(--secondary); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); }
+
+        .header-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        .toolbar-meta {
+            color: var(--gray);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toolbar-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            transition: all 0.2s ease;
+        }
+
+        .status-ok {
+            background: rgba(16, 185, 129, 0.12);
+            color: #047857;
+        }
+
+        .status-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #b45309;
+        }
+
+        .status-critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: #b91c1c;
+        }
+
+        .status-info,
+        .status-observing {
+            background: rgba(59, 130, 246, 0.15);
+            color: #1d4ed8;
+        }
+
+        .refresh-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gray);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .refresh-toggle input {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .btn-light {
+            background: white;
+            color: var(--primary);
+            border: 2px solid rgba(99, 102, 241, 0.2);
+            box-shadow: none;
+        }
+
+        .btn-light:hover {
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary-dark);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: all 0.2s ease;
+        }
+
+        .status-indicator .status-dot {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .alert-list {
+            list-style: none;
+            margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0;
+        }
+
+        .alert-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 16px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: rgba(248, 250, 252, 0.95);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .alert-item strong {
+            font-size: 15px;
+            color: var(--dark);
+        }
+
+        .alert-item span {
+            font-size: 13px;
+            color: var(--gray);
+            line-height: 1.6;
+        }
+
+        .alert-item .alert-actions {
+            display: inline-flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .alert-item .alert-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            padding: 8px 12px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .alert-item .alert-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(99, 102, 241, 0.25);
+        }
+
+        .alert-item.alert-warning {
+            border-color: rgba(245, 158, 11, 0.35);
+            background: linear-gradient(135deg, #fffbeb, #fef3c7);
+        }
+
+        .alert-item.alert-critical {
+            border-color: rgba(239, 68, 68, 0.35);
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+        }
+
+        .alert-item.alert-info,
+        .alert-item.alert-observing {
+            border-color: rgba(59, 130, 246, 0.3);
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        }
+
+        .alert-item.alert-ok {
+            border-color: rgba(16, 185, 129, 0.3);
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+        }
+
+        .alert-empty {
+            font-size: 13px;
+            color: #047857;
+            font-weight: 600;
+        }
 
         .tabs {
             display: flex;
@@ -565,6 +892,13 @@ function h($value): string
         .btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .btn-success {
@@ -787,6 +1121,10 @@ function h($value): string
             .grid {
                 grid-template-columns: 1fr;
             }
+
+            .toolbar-actions {
+                justify-content: flex-start;
+            }
             
             .gateway-grid {
                 grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -826,6 +1164,24 @@ if ('serviceWorker' in navigator) {
 </script>
 <div class="container">
     <div class="header">
+        <div class="header-toolbar">
+            <div class="toolbar-meta">
+                <span class="status-pill <?= h($overallStatusClass) ?>" id="overall-status"><?= h($overallStatusLabel) ?></span>
+                <span>Generated
+                    <time id="dashboard-generated-at" datetime="<?= h(date(DATE_ATOM, $generatedAtTs)) ?>">
+                        <?= h(date('Y-m-d H:i:s', $generatedAtTs)) ?>
+                    </time>
+                </span>
+            </div>
+            <div class="toolbar-actions">
+                <span class="status-pill status-ok" id="refresh-status">Live</span>
+                <label class="refresh-toggle" for="auto-refresh-toggle">
+                    <input type="checkbox" id="auto-refresh-toggle" checked>
+                    <span>Auto-refresh (15s)</span>
+                </label>
+                <button class="btn btn-light" type="button" id="refresh-button">🔄 Refresh Now</button>
+            </div>
+        </div>
         <h1><span>🎯</span> Advanced Payment & Proxy Intelligence Hub</h1>
         <p class="subtitle">
             Enterprise-grade proxy rotation system with multi-gateway payment reconnaissance. 
@@ -847,12 +1203,12 @@ if ('serviceWorker' in navigator) {
 
     <!-- Navigation Tabs -->
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-        <button class="tab" onclick="switchTab('gateways')">💳 Payment Gateways</button>
-        <button class="tab" onclick="switchTab('proxies')">🌐 Proxy Manager</button>
-        <button class="tab" onclick="switchTab('tools')">🛠️ Tools & Tests</button>
-        <button class="tab" onclick="switchTab('logs')">📈 Logs & Analytics</button>
-        <button class="tab" onclick="switchTab('docs')">📚 Documentation</button>
+        <button class="tab active" onclick="switchTab('dashboard', this)">📊 Dashboard</button>
+        <button class="tab" onclick="switchTab('gateways', this)">💳 Payment Gateways</button>
+        <button class="tab" onclick="switchTab('proxies', this)">🌐 Proxy Manager</button>
+        <button class="tab" onclick="switchTab('tools', this)">🛠️ Tools & Tests</button>
+        <button class="tab" onclick="switchTab('logs', this)">📈 Logs & Analytics</button>
+        <button class="tab" onclick="switchTab('docs', this)">📚 Documentation</button>
     </div>
 
     <!-- Dashboard Tab -->
@@ -874,6 +1230,38 @@ if ('serviceWorker' in navigator) {
         </div>
 
         <div class="grid">
+            <div class="card">
+                <h2>🛡️ Operational Status</h2>
+                <p>High-level health view with recommended next steps.</p>
+                <div class="status-indicator <?= h($overallStatusClass) ?>" id="overall-status-indicator">
+                    <span class="status-dot">●</span>
+                    <span id="overall-status-text"><?= h($overallStatusLabel) ?></span>
+                </div>
+                <ul class="alert-list" id="alert-list">
+                    <?php if (!empty($dashboard['alerts'])): ?>
+                        <?php foreach ($dashboard['alerts'] as $alert): ?>
+                            <li class="alert-item alert-<?= h($alert['severity']) ?>">
+                                <div>
+                                    <strong><?= h($alert['title']) ?></strong>
+                                    <?php if (!empty($alert['message'])): ?>
+                                        <span><?= h($alert['message']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (isset($alert['cta']['url']) && $alert['cta']['url'] !== ''): ?>
+                                    <div class="alert-actions">
+                                        <a class="alert-action" href="<?= h($alert['cta']['url']) ?>" target="_blank" rel="noopener">
+                                            <?= h($alert['cta']['label'] ?? 'View Details') ?>
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <li class="alert-item alert-ok alert-empty">All systems operational.</li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+
             <div class="card">
                 <h2>🌐 Proxy Inventory</h2>
                 <p>Live snapshot of ProxyList.txt with distribution by protocol and authentication.</p>
@@ -1301,120 +1689,345 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
 </div>
 
 <script>
-const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const STATUS_CLASS_MAP = {
+    operational: 'status-ok',
+    degraded: 'status-warning',
+    critical: 'status-critical',
+    observing: 'status-info'
+};
 
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tabs
+const STATUS_LABEL_MAP = {
+    operational: 'Operational',
+    degraded: 'Degraded',
+    critical: 'Attention Required',
+    observing: 'Monitoring'
+};
+
+const REFRESH_TONE_CLASS = {
+    ok: 'status-ok',
+    info: 'status-info',
+    warning: 'status-warning',
+    critical: 'status-critical'
+};
+
+const REFRESH_INTERVAL_MS = 15000;
+
+const refreshStatusEl = document.getElementById('refresh-status');
+const refreshButton = document.getElementById('refresh-button');
+const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
+const generatedAtEl = document.getElementById('dashboard-generated-at');
+const overallStatusHeader = document.getElementById('overall-status');
+const overallStatusIndicator = document.getElementById('overall-status-indicator');
+const overallStatusText = document.getElementById('overall-status-text');
+const alertListEl = document.getElementById('alert-list');
+
+let refreshIntervalId = null;
+let isRefreshing = false;
+
+function switchTab(tabName, button) {
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
-    
-    // Remove active class from all tab buttons
+
     document.querySelectorAll('.tab').forEach(btn => {
         btn.classList.remove('active');
     });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
+
+    const targetTab = document.getElementById(`${tabName}-tab`);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
+
+    if (button instanceof HTMLElement) {
+        button.classList.add('active');
+    }
 }
 
-// Gateway search filter
 function filterGateways() {
-    const searchTerm = document.getElementById('gateway-search').value.toLowerCase();
+    const input = document.getElementById('gateway-search');
+    const searchTerm = input ? input.value.trim().toLowerCase() : '';
     const cards = document.querySelectorAll('.gateway-card');
-    
+
     cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const category = card.getAttribute('data-category');
-        
-        if (name.includes(searchTerm) || category.includes(searchTerm)) {
-            card.style.display = 'block';
+        const name = (card.getAttribute('data-name') || '').toLowerCase();
+        const category = (card.getAttribute('data-category') || '').toLowerCase();
+        const matches = !searchTerm || name.includes(searchTerm) || category.includes(searchTerm);
+        card.style.display = matches ? '' : 'none';
+    });
+}
+
+function setElementText(id, value) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.textContent = value;
+    }
+}
+
+function setRefreshBadge(tone, message) {
+    if (!refreshStatusEl) return;
+    const toneClass = REFRESH_TONE_CLASS[tone] || REFRESH_TONE_CLASS.info;
+    refreshStatusEl.className = `status-pill ${toneClass}`;
+    refreshStatusEl.textContent = message;
+}
+
+function beginRefreshUi() {
+    setRefreshBadge('info', 'Refreshing…');
+    if (refreshButton) {
+        refreshButton.disabled = true;
+    }
+}
+
+function endRefreshUi(success) {
+    if (success) {
+        setRefreshBadge('ok', `Live · ${new Date().toLocaleTimeString()}`);
+    }
+    if (refreshButton) {
+        refreshButton.disabled = false;
+    }
+}
+
+function updateGeneratedAt(dateString) {
+    if (!generatedAtEl) return;
+    let parsedDate = dateString ? new Date(dateString) : new Date();
+    if (Number.isNaN(parsedDate.getTime())) {
+        parsedDate = new Date();
+    }
+    generatedAtEl.dateTime = parsedDate.toISOString();
+    generatedAtEl.textContent = parsedDate.toLocaleString();
+}
+
+function setOverallStatus(statusKey) {
+    const className = STATUS_CLASS_MAP[statusKey] || STATUS_CLASS_MAP.observing;
+    const label = STATUS_LABEL_MAP[statusKey] || (statusKey ? statusKey.charAt(0).toUpperCase() + statusKey.slice(1) : 'Unknown');
+
+    if (overallStatusHeader) {
+        overallStatusHeader.className = `status-pill ${className}`;
+        overallStatusHeader.textContent = label;
+    }
+    if (overallStatusIndicator) {
+        overallStatusIndicator.className = `status-indicator ${className}`;
+    }
+    if (overallStatusText) {
+        overallStatusText.textContent = label;
+    }
+}
+
+function updateAlerts(alerts) {
+    if (!alertListEl) return;
+    alertListEl.replaceChildren();
+
+    if (!Array.isArray(alerts) || alerts.length === 0) {
+        const emptyItem = document.createElement('li');
+        emptyItem.className = 'alert-item alert-ok alert-empty';
+        emptyItem.textContent = 'All systems operational.';
+        alertListEl.appendChild(emptyItem);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const allowedSeverities = new Set(['critical', 'warning', 'info', 'observing']);
+
+    alerts.forEach(alert => {
+        const severity = typeof alert.severity === 'string' ? alert.severity.toLowerCase() : 'info';
+        const severityClass = allowedSeverities.has(severity) ? severity : 'info';
+
+        const item = document.createElement('li');
+        item.className = `alert-item alert-${severityClass}`;
+
+        const textWrapper = document.createElement('div');
+        if (alert.title) {
+            const titleEl = document.createElement('strong');
+            titleEl.textContent = alert.title;
+            textWrapper.appendChild(titleEl);
+        }
+        if (alert.message) {
+            const messageEl = document.createElement('span');
+            messageEl.textContent = alert.message;
+            textWrapper.appendChild(messageEl);
+        }
+        item.appendChild(textWrapper);
+
+        if (alert.cta && typeof alert.cta.url === 'string' && alert.cta.url.length > 0) {
+            const actions = document.createElement('div');
+            actions.className = 'alert-actions';
+            const actionLink = document.createElement('a');
+            actionLink.className = 'alert-action';
+            actionLink.href = alert.cta.url;
+            actionLink.target = '_blank';
+            actionLink.rel = 'noopener';
+            actionLink.textContent = alert.cta.label || 'View Details';
+            actions.appendChild(actionLink);
+            item.appendChild(actions);
+        }
+
+        fragment.appendChild(item);
+    });
+
+    alertListEl.appendChild(fragment);
+}
+
+function updateProxyTypes(byType) {
+    const container = document.getElementById('proxy-types');
+    if (!container) return;
+    container.replaceChildren();
+
+    if (!byType || Object.keys(byType).length === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No proxies loaded.';
+        container.appendChild(empty);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    Object.keys(byType).sort().forEach(type => {
+        const row = document.createElement('div');
+        row.style.margin = '5px 0';
+
+        const label = document.createElement('strong');
+        label.textContent = `${type.toUpperCase()}:`;
+        row.appendChild(label);
+        row.appendChild(document.createTextNode(` ${byType[type]}`));
+
+        fragment.appendChild(row);
+    });
+
+    container.appendChild(fragment);
+}
+
+function updateProxySample(sample) {
+    const container = document.getElementById('proxy-sample');
+    if (!container) return;
+    container.replaceChildren();
+
+    if (!Array.isArray(sample) || sample.length === 0) {
+        container.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    sample.forEach(line => {
+        const entry = document.createElement('div');
+        entry.textContent = line;
+        fragment.appendChild(entry);
+    });
+    container.appendChild(fragment);
+}
+
+function updateLog(elementId, lines, emptyMessage) {
+    const target = document.getElementById(elementId);
+    if (!target) return;
+
+    target.replaceChildren();
+    if (!Array.isArray(lines) || lines.length === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = emptyMessage || 'No data available.';
+        target.appendChild(empty);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    lines.forEach(line => {
+        const row = document.createElement('div');
+        row.textContent = line;
+        fragment.appendChild(row);
+    });
+    target.appendChild(fragment);
+    target.scrollTop = target.scrollHeight;
+}
+
+function refreshDashboard() {
+    if (isRefreshing) return;
+
+    isRefreshing = true;
+    beginRefreshUi();
+
+    fetch('index.php?stats=1', { cache: 'no-store' })
+        .then(resp => {
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            return resp.json();
+        })
+        .then(data => {
+            if (!data || !data.proxies || !data.system) {
+                throw new Error('Invalid dashboard payload');
+            }
+
+            setElementText('proxy-total', data.proxies.total ?? 0);
+            setElementText('proxy-total-stat', data.proxies.total ?? 0);
+            setElementText('proxy-unique', data.proxies.unique ?? 0);
+            setElementText('proxy-unique-stat', data.proxies.unique ?? 0);
+            setElementText('proxy-auth', data.proxies.withAuth ?? 0);
+            setElementText('proxy-noauth', data.proxies.withoutAuth ?? 0);
+            setElementText('proxy-updated', data.proxies.lastUpdatedHuman || 'Never');
+            setElementText('health-last', data.system.lastHealthCheckHuman || 'Never');
+            setElementText('last-update', `⏱️ ${new Date().toLocaleTimeString()}`);
+
+            updateProxyTypes(data.proxies.byType || {});
+            updateProxySample(data.proxies.sample || []);
+            updateAlerts(data.alerts || []);
+            setOverallStatus(data.status?.overall || 'operational');
+            updateGeneratedAt(data.generatedAt);
+
+            updateLog('proxy-log', data.logs?.proxy || [], 'No log entries yet.');
+            updateLog('rotation-log', data.logs?.rotation || [], 'No rotation events captured.');
+
+            endRefreshUi(true);
+        })
+        .catch(error => {
+            console.error('Dashboard refresh failed:', error);
+            setRefreshBadge('critical', 'Refresh failed');
+            endRefreshUi(false);
+        })
+        .finally(() => {
+            isRefreshing = false;
+        });
+}
+
+function startAutoRefresh() {
+    if (refreshIntervalId !== null) {
+        clearInterval(refreshIntervalId);
+    }
+    if (autoRefreshToggle && !autoRefreshToggle.checked) {
+        return;
+    }
+    refreshIntervalId = setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+    if (refreshIntervalId !== null) {
+        clearInterval(refreshIntervalId);
+        refreshIntervalId = null;
+    }
+}
+
+if (refreshButton) {
+    refreshButton.addEventListener('click', () => {
+        refreshDashboard();
+    });
+}
+
+if (autoRefreshToggle) {
+    autoRefreshToggle.addEventListener('change', event => {
+        if (event.target.checked) {
+            setRefreshBadge('info', 'Refreshing…');
+            startAutoRefresh();
+            refreshDashboard();
         } else {
-            card.style.display = 'none';
+            stopAutoRefresh();
+            setRefreshBadge('warning', 'Paused');
         }
     });
 }
 
-// Refresh dashboard data
-function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
-        .then(resp => resp.json())
-        .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
+startAutoRefresh();
+refreshDashboard();
 
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
-
-            // Update proxy types
-            const typesContainer = document.getElementById('proxy-types');
-            if (typesContainer && data.proxies.byType) {
-                typesContainer.innerHTML = '';
-                Object.keys(data.proxies.byType).sort().forEach(type => {
-                    const div = document.createElement('div');
-                    div.style.margin = '5px 0';
-                    div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${data.proxies.byType[type]}`;
-                    typesContainer.appendChild(div);
-                });
-            }
-
-            // Update proxy sample
-            const sampleContainer = document.getElementById('proxy-sample');
-            if (sampleContainer && data.proxies.sample) {
-                sampleContainer.innerHTML = '';
-                if (data.proxies.sample.length === 0) {
-                    sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
-                } else {
-                    data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
-                    });
-                }
-            }
-
-            // Update logs
-            updateLog('proxy-log', data.logs.proxy);
-            updateLog('rotation-log', data.logs.rotation);
-        })
-        .catch(() => {
-            console.log('Dashboard refresh failed, will retry...');
-        });
-}
-
-function updateLog(elementId, lines) {
-    const target = document.getElementById(elementId);
-    if (!target) return;
-    
-    target.innerHTML = '';
-    if (!lines || lines.length === 0) {
-        target.textContent = 'No data available.';
-        return;
-    }
-    
-    lines.forEach(line => {
-        target.innerHTML += line + '<br>';
-    });
-}
-
-// Auto-refresh every 15 seconds
-setInterval(refreshDashboard, 15000);
-
-// Initial update timestamp
 setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
+    const lastUpdateEl = document.getElementById('last-update');
+    if (lastUpdateEl) {
+        lastUpdateEl.textContent = `⏱️ ${new Date().toLocaleTimeString()}`;
+    }
 }, 1000);
 
 console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
