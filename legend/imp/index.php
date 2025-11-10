@@ -274,6 +274,13 @@ if (isset($_GET['stats'])) {
 }
 
 $dashboard = get_dashboard_data();
+$proxyTotal = max(0, (int) ($dashboard['proxies']['total'] ?? 0));
+$proxyUnique = max(0, (int) ($dashboard['proxies']['unique'] ?? 0));
+$proxyWithAuth = max(0, (int) ($dashboard['proxies']['withAuth'] ?? 0));
+$proxyWithoutAuth = max(0, (int) ($dashboard['proxies']['withoutAuth'] ?? 0));
+$uniquePercent = $proxyTotal > 0 ? (int) round(($proxyUnique / $proxyTotal) * 100) : 0;
+$authPercent = $proxyTotal > 0 ? (int) round(($proxyWithAuth / $proxyTotal) * 100) : 0;
+$noAuthPercent = $proxyTotal > 0 ? (int) round(($proxyWithoutAuth / $proxyTotal) * 100) : 0;
 
 /**
  * HTML-escape helper.
@@ -423,6 +430,94 @@ function h($value): string
         .status.blue { background: var(--info); box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
         .status.purple { background: var(--secondary); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); }
 
+        .dashboard-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 24px;
+            align-items: center;
+        }
+
+        .refresh-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.1);
+            color: #3730a3;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-status[data-state="success"] {
+            background: rgba(16, 185, 129, 0.15);
+            color: #047857;
+        }
+
+        .refresh-status[data-state="loading"] {
+            background: rgba(59, 130, 246, 0.15);
+            color: #1d4ed8;
+        }
+
+        .refresh-status[data-state="error"] {
+            background: rgba(239, 68, 68, 0.15);
+            color: #b91c1c;
+        }
+
+        .refresh-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .refresh-status[data-state="loading"] .refresh-dot {
+            animation: pulseDot 1.2s ease-in-out infinite;
+        }
+
+        .btn-ghost {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary);
+            box-shadow: none;
+        }
+
+        .btn-ghost:hover {
+            background: rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+            box-shadow: none;
+        }
+
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(15, 23, 42, 0.06);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--dark);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: translateY(-2px);
+            background: rgba(15, 23, 42, 0.12);
+        }
+
+        .theme-toggle:focus-visible {
+            outline: 3px solid rgba(99, 102, 241, 0.35);
+            outline-offset: 2px;
+        }
+
+        .theme-toggle .theme-icon {
+            font-size: 16px;
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -432,6 +527,7 @@ function h($value): string
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
             overflow-x: auto;
+            align-items: center;
         }
 
         .tab {
@@ -452,7 +548,13 @@ function h($value): string
             border-color: var(--primary);
         }
 
-        .tab.active {
+        .tab:focus-visible {
+            outline: 3px solid rgba(99, 102, 241, 0.35);
+            outline-offset: 2px;
+        }
+
+        .tab.active,
+        .tab[aria-selected="true"] {
             background: var(--primary);
             color: white;
             border-color: var(--primary);
@@ -460,11 +562,14 @@ function h($value): string
         }
 
         .tab-content {
-            display: none;
+            display: block;
+        }
+
+        .tab-content[hidden] {
+            display: none !important;
         }
 
         .tab-content.active {
-            display: block;
             animation: fadeIn 0.4s ease;
         }
 
@@ -540,6 +645,53 @@ function h($value): string
             color: var(--primary);
             font-weight: 700;
             font-size: 16px;
+        }
+
+        .progress-grid {
+            display: grid;
+            gap: 15px;
+            margin-top: 18px;
+        }
+
+        .progress-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--gray);
+            text-transform: uppercase;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(100, 116, 139, 0.15);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 999px;
+            background: var(--primary);
+            transition: width 0.4s ease;
+        }
+
+        .progress-bar--success {
+            background: var(--success);
+        }
+
+        .progress-bar--warning {
+            background: var(--warning);
         }
 
         .btn {
@@ -783,6 +935,89 @@ function h($value): string
             border-color: var(--primary);
         }
 
+        @keyframes pulseDot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.6; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        body.theme-dark {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .header,
+        body.theme-dark .tabs,
+        body.theme-dark .card {
+            background: rgba(15, 23, 42, 0.92);
+            color: inherit;
+            box-shadow: 0 15px 40px rgba(2, 6, 23, 0.6);
+        }
+
+        body.theme-dark .subtitle,
+        body.theme-dark .card p,
+        body.theme-dark .feature-list li {
+            color: #94a3b8;
+        }
+
+        body.theme-dark .tab {
+            color: #e2e8f0;
+            border-color: rgba(148, 163, 184, 0.35);
+        }
+
+        body.theme-dark .tab:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        body.theme-dark .tab.active,
+        body.theme-dark .tab[aria-selected="true"] {
+            border-color: var(--primary);
+        }
+
+        body.theme-dark .stats-card {
+            background: linear-gradient(135deg, #312e81, #1e3a8a);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.6);
+        }
+
+        body.theme-dark .code-block {
+            background: #0f172a;
+        }
+
+        body.theme-dark .log-box {
+            background: #020617;
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .info-box {
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.5);
+        }
+
+        body.theme-dark .btn-ghost {
+            background: rgba(129, 140, 248, 0.25);
+            color: #ede9fe;
+        }
+
+        body.theme-dark .theme-toggle {
+            background: rgba(148, 163, 184, 0.08);
+            color: #f8fafc;
+        }
+
+        body.theme-dark .refresh-status {
+            background: rgba(59, 130, 246, 0.2);
+            color: #bfdbfe;
+        }
+
+        body.theme-dark .progress-track {
+            background: rgba(148, 163, 184, 0.25);
+        }
+
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -843,20 +1078,33 @@ if ('serviceWorker' in navigator) {
             <span class="status blue">🌐 50+ Gateways</span>
             <span class="status purple" id="last-update">⏱️ <?= h(date('H:i:s')) ?></span>
         </div>
+        <div class="dashboard-controls" role="region" aria-label="Dashboard controls">
+            <div class="refresh-status" id="refresh-status" data-state="success" role="status" aria-live="polite">
+                <span class="refresh-dot" aria-hidden="true"></span>
+                <span id="refresh-status-text">Live data loaded</span>
+            </div>
+            <button type="button" class="btn btn-ghost" id="refresh-now">
+                🔄 Refresh Now
+            </button>
+            <button type="button" class="theme-toggle" id="theme-toggle" aria-pressed="false">
+                <span class="theme-icon" aria-hidden="true">🌙</span>
+                <span class="theme-label">Dark mode</span>
+            </button>
+        </div>
     </div>
 
     <!-- Navigation Tabs -->
-    <div class="tabs">
-        <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-        <button class="tab" onclick="switchTab('gateways')">💳 Payment Gateways</button>
-        <button class="tab" onclick="switchTab('proxies')">🌐 Proxy Manager</button>
-        <button class="tab" onclick="switchTab('tools')">🛠️ Tools & Tests</button>
-        <button class="tab" onclick="switchTab('logs')">📈 Logs & Analytics</button>
-        <button class="tab" onclick="switchTab('docs')">📚 Documentation</button>
+    <div class="tabs" role="tablist" aria-label="Dashboard navigation">
+        <button type="button" class="tab active" id="tab-dashboard" data-tab="dashboard" role="tab" aria-selected="true" aria-controls="dashboard-tab" tabindex="0">📊 Dashboard</button>
+        <button type="button" class="tab" id="tab-gateways" data-tab="gateways" role="tab" aria-selected="false" aria-controls="gateways-tab" tabindex="-1">💳 Payment Gateways</button>
+        <button type="button" class="tab" id="tab-proxies" data-tab="proxies" role="tab" aria-selected="false" aria-controls="proxies-tab" tabindex="-1">🌐 Proxy Manager</button>
+        <button type="button" class="tab" id="tab-tools" data-tab="tools" role="tab" aria-selected="false" aria-controls="tools-tab" tabindex="-1">🛠️ Tools & Tests</button>
+        <button type="button" class="tab" id="tab-logs" data-tab="logs" role="tab" aria-selected="false" aria-controls="logs-tab" tabindex="-1">📈 Logs & Analytics</button>
+        <button type="button" class="tab" id="tab-docs" data-tab="docs" role="tab" aria-selected="false" aria-controls="docs-tab" tabindex="-1">📚 Documentation</button>
     </div>
 
     <!-- Dashboard Tab -->
-    <div id="dashboard-tab" class="tab-content active">
+    <div id="dashboard-tab" class="tab-content active" role="tabpanel" aria-labelledby="tab-dashboard" tabindex="0">
         <div class="grid">
             <!-- Stats Cards -->
             <div class="stats-card">
@@ -906,6 +1154,35 @@ if ('serviceWorker' in navigator) {
                         <div>No proxies loaded.</div>
                     <?php endif; ?>
                 </div>
+                <div class="progress-grid">
+                    <div class="progress-group">
+                        <div class="progress-header">
+                            <span>Unique Coverage</span>
+                            <span id="coverage-unique-percent"><?= h($uniquePercent) ?>%</span>
+                        </div>
+                        <div class="progress-track" role="progressbar" aria-label="Unique proxy coverage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= h($uniquePercent) ?>">
+                            <div id="coverage-unique-bar" class="progress-bar" style="width: <?= h($uniquePercent) ?>%;"></div>
+                        </div>
+                    </div>
+                    <div class="progress-group">
+                        <div class="progress-header">
+                            <span>Authenticated Coverage</span>
+                            <span id="coverage-auth-percent"><?= h($authPercent) ?>%</span>
+                        </div>
+                        <div class="progress-track" role="progressbar" aria-label="Authenticated proxy coverage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= h($authPercent) ?>">
+                            <div id="coverage-auth-bar" class="progress-bar progress-bar--success" style="width: <?= h($authPercent) ?>%;"></div>
+                        </div>
+                    </div>
+                    <div class="progress-group">
+                        <div class="progress-header">
+                            <span>Unauthenticated Coverage</span>
+                            <span id="coverage-noauth-percent"><?= h($noAuthPercent) ?>%</span>
+                        </div>
+                        <div class="progress-track" role="progressbar" aria-label="Unauthenticated proxy coverage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= h($noAuthPercent) ?>">
+                            <div id="coverage-noauth-bar" class="progress-bar progress-bar--warning" style="width: <?= h($noAuthPercent) ?>%;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="card">
@@ -944,12 +1221,12 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Payment Gateways Tab -->
-    <div id="gateways-tab" class="tab-content">
+    <div id="gateways-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-gateways" tabindex="0" hidden>
         <div class="card">
             <h2>💳 Supported Payment Gateways & Platforms</h2>
             <p>Comprehensive support for 50+ payment gateways and e-commerce platforms worldwide.</p>
             
-            <input type="text" id="gateway-search" class="search-box" placeholder="🔍 Search gateways..." onkeyup="filterGateways()">
+            <input type="text" id="gateway-search" class="search-box" placeholder="🔍 Search gateways..." autocomplete="off">
             
             <div class="gateway-grid" id="gateway-grid">
                 <?php foreach ($dashboard['gateways'] as $gateway): ?>
@@ -987,7 +1264,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Proxy Manager Tab -->
-    <div id="proxies-tab" class="tab-content">
+    <div id="proxies-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-proxies" tabindex="0" hidden>
         <div class="card">
             <h2>🌐 Proxy Fetcher & Tester</h2>
             <p>Automatically scrape and test proxies from 12+ sources with 200× parallel testing.</p>
@@ -1071,7 +1348,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Tools & Tests Tab -->
-    <div id="tools-tab" class="tab-content">
+    <div id="tools-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-tools" tabindex="0" hidden>
         <div class="grid">
             <div class="card">
                 <h2>🧪 Test Specific Proxy</h2>
@@ -1186,7 +1463,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Logs & Analytics Tab -->
-    <div id="logs-tab" class="tab-content">
+    <div id="logs-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-logs" tabindex="0" hidden>
         <div class="card">
             <h2>📈 Proxy Logs</h2>
             <p>Real-time proxy connection and error logs.</p>
@@ -1224,7 +1501,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- Documentation Tab -->
-    <div id="docs-tab" class="tab-content">
+    <div id="docs-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-docs" tabindex="0" hidden>
         <div class="card">
             <h2>📚 API Endpoints</h2>
             <p>REST API endpoints for automation and integration.</p>
@@ -1303,123 +1580,309 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
 <script>
 const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
-}
+(() => {
+    const tabButtons = Array.from(document.querySelectorAll('.tab[data-tab]'));
+    const tabPanels = Array.from(document.querySelectorAll('.tab-content'));
+    const refreshStatus = document.getElementById('refresh-status');
+    const refreshStatusText = document.getElementById('refresh-status-text');
+    const refreshNowBtn = document.getElementById('refresh-now');
+    const themeToggle = document.getElementById('theme-toggle');
+    const gatewaySearch = document.getElementById('gateway-search');
+    const lastUpdateEl = document.getElementById('last-update');
+    const body = document.body;
+    const themeKey = 'legend-theme';
+    let refreshInFlight = false;
+    let dashboardCache = dashboardState;
 
-// Gateway search filter
-function filterGateways() {
-    const searchTerm = document.getElementById('gateway-search').value.toLowerCase();
-    const cards = document.querySelectorAll('.gateway-card');
-    
-    cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const category = card.getAttribute('data-category');
-        
-        if (name.includes(searchTerm) || category.includes(searchTerm)) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
+    function setRefreshState(state, message) {
+        if (!refreshStatus) {
+            return;
+        }
+        refreshStatus.dataset.state = state;
+        if (refreshStatusText && typeof message === 'string') {
+            refreshStatusText.textContent = message;
+            refreshStatus.setAttribute('title', message);
+        }
+    }
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = value === undefined || value === null ? '' : value;
+        }
+    }
+
+    function clampPercent(value) {
+        return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    }
+
+    function updateProgress(kind, percent) {
+        const safePercent = clampPercent(percent);
+        const percentEl = document.getElementById(`coverage-${kind}-percent`);
+        if (percentEl) {
+            percentEl.textContent = `${safePercent}%`;
+        }
+        const bar = document.getElementById(`coverage-${kind}-bar`);
+        if (bar) {
+            bar.style.width = `${safePercent}%`;
+            if (bar.parentElement) {
+                bar.parentElement.setAttribute('aria-valuenow', String(safePercent));
+            }
+        }
+    }
+
+    function updateLog(elementId, lines) {
+        const target = document.getElementById(elementId);
+        if (!target) {
+            return;
+        }
+        target.innerHTML = '';
+        if (!Array.isArray(lines) || lines.length === 0) {
+            target.textContent = 'No data available.';
+            return;
+        }
+        lines.forEach(line => {
+            const entry = document.createElement('div');
+            entry.textContent = line;
+            target.appendChild(entry);
+        });
+    }
+
+    function renderProxyTypes(types) {
+        const container = document.getElementById('proxy-types');
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '';
+        const entries = Object.keys(types || {}).sort();
+        if (entries.length === 0) {
+            const placeholder = document.createElement('div');
+            placeholder.textContent = 'No proxies loaded.';
+            container.appendChild(placeholder);
+            return;
+        }
+        entries.forEach(type => {
+            const row = document.createElement('div');
+            row.style.margin = '5px 0';
+            const label = document.createElement('strong');
+            label.textContent = `${String(type).toUpperCase()}: `;
+            row.appendChild(label);
+            row.append(String(types[type] ?? 0));
+            container.appendChild(row);
+        });
+    }
+
+    function renderProxySample(sample) {
+        const container = document.getElementById('proxy-sample');
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '';
+        if (!Array.isArray(sample) || sample.length === 0) {
+            container.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
+            return;
+        }
+        sample.forEach(item => {
+            const line = document.createElement('div');
+            line.textContent = item;
+            container.appendChild(line);
+        });
+    }
+
+    function applyDashboardData(data) {
+        if (!data) {
+            return;
+        }
+        const proxies = data.proxies || {};
+        const system = data.system || {};
+        const logs = data.logs || {};
+        const total = Number(proxies.total ?? 0);
+        const unique = Number(proxies.unique ?? 0);
+        const withAuth = Number(proxies.withAuth ?? 0);
+        const withoutAuth = Number(proxies.withoutAuth ?? 0);
+
+        setText('proxy-total', total);
+        setText('proxy-total-stat', total);
+        setText('proxy-unique', unique);
+        setText('proxy-unique-stat', unique);
+        setText('proxy-auth', withAuth);
+        setText('proxy-noauth', withoutAuth);
+        setText('proxy-updated', proxies.lastUpdatedHuman ?? 'Never');
+        setText('health-last', system.lastHealthCheckHuman ?? 'Never');
+        setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+
+        const uniquePercent = total > 0 ? (unique / total) * 100 : 0;
+        const authPercent = total > 0 ? (withAuth / total) * 100 : 0;
+        const noAuthPercent = total > 0 ? (withoutAuth / total) * 100 : 0;
+
+        updateProgress('unique', uniquePercent);
+        updateProgress('auth', authPercent);
+        updateProgress('noauth', noAuthPercent);
+
+        renderProxyTypes(proxies.byType);
+        renderProxySample(proxies.sample);
+
+        updateLog('proxy-log', logs.proxy);
+        updateLog('rotation-log', logs.rotation);
+    }
+
+    function activateTab(tabId) {
+        if (!tabId) {
+            return;
+        }
+        tabButtons.forEach(button => {
+            const isActive = button.dataset.tab === tabId;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+            button.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+        tabPanels.forEach(panel => {
+            const matches = panel.id === `${tabId}-tab`;
+            panel.classList.toggle('active', matches);
+            panel.hidden = !matches;
+            panel.setAttribute('tabindex', matches ? '0' : '-1');
+        });
+    }
+
+    function initTabs() {
+        if (!tabButtons.length) {
+            return;
+        }
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                activateTab(button.dataset.tab);
+                button.focus();
+            });
+            button.addEventListener('keydown', event => {
+                const key = event.key;
+                const currentIndex = tabButtons.indexOf(button);
+                let targetIndex = null;
+                if (key === 'ArrowRight' || key === 'ArrowDown') {
+                    targetIndex = (currentIndex + 1) % tabButtons.length;
+                } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+                    targetIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+                } else if (key === 'Home') {
+                    targetIndex = 0;
+                } else if (key === 'End') {
+                    targetIndex = tabButtons.length - 1;
+                }
+                if (targetIndex !== null) {
+                    event.preventDefault();
+                    const targetTab = tabButtons[targetIndex];
+                    activateTab(targetTab.dataset.tab);
+                    targetTab.focus();
+                }
+            });
+        });
+        const initiallySelected = tabButtons.find(button => button.getAttribute('aria-selected') === 'true') || tabButtons[0];
+        if (initiallySelected) {
+            activateTab(initiallySelected.dataset.tab);
+        }
+    }
+
+    function filterGatewayCards(term) {
+        const normalized = String(term || '').toLowerCase();
+        const cards = document.querySelectorAll('.gateway-card');
+        cards.forEach(card => {
+            const name = (card.getAttribute('data-name') || '').toLowerCase();
+            const category = (card.getAttribute('data-category') || '').toLowerCase();
+            const matches = !normalized || name.includes(normalized) || category.includes(normalized);
+            card.style.display = matches ? '' : 'none';
+        });
+    }
+
+    async function refreshDashboard(force = false) {
+        if (refreshInFlight && !force) {
+            return;
+        }
+        refreshInFlight = true;
+        setRefreshState('loading', 'Syncing latest data…');
+        try {
+            const response = await fetch('index.php?stats=1', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+            }
+            const data = await response.json();
+            dashboardCache = data;
+            applyDashboardData(data);
+            setRefreshState('success', 'Synced at ' + new Date().toLocaleTimeString());
+        } catch (error) {
+            console.error('Dashboard refresh failed', error);
+            setRefreshState('error', 'Sync failed. Retry in 15s or refresh now.');
+        } finally {
+            refreshInFlight = false;
+        }
+    }
+
+    refreshNowBtn?.addEventListener('click', () => {
+        refreshDashboard(true);
+    });
+
+    if (gatewaySearch) {
+        gatewaySearch.addEventListener('input', event => {
+            filterGatewayCards(event.target.value);
+        });
+    }
+
+    const prefersDarkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function applyTheme(mode) {
+        const isDark = mode === 'dark';
+        body.classList.toggle('theme-dark', isDark);
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', String(isDark));
+            const icon = themeToggle.querySelector('.theme-icon');
+            const label = themeToggle.querySelector('.theme-label');
+            if (icon) {
+                icon.textContent = isDark ? '☀️' : '🌙';
+            }
+            if (label) {
+                label.textContent = isDark ? 'Light mode' : 'Dark mode';
+            }
+        }
+    }
+
+    function setTheme(mode) {
+        localStorage.setItem(themeKey, mode);
+        applyTheme(mode);
+    }
+
+    const storedTheme = localStorage.getItem(themeKey);
+    applyTheme(storedTheme || (prefersDarkQuery && prefersDarkQuery.matches ? 'dark' : 'light'));
+
+    themeToggle?.addEventListener('click', () => {
+        const nextTheme = body.classList.contains('theme-dark') ? 'light' : 'dark';
+        setTheme(nextTheme);
+    });
+
+    prefersDarkQuery?.addEventListener('change', event => {
+        if (!localStorage.getItem(themeKey)) {
+            applyTheme(event.matches ? 'dark' : 'light');
         }
     });
-}
 
-// Refresh dashboard data
-function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
-        .then(resp => resp.json())
-        .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
+    initTabs();
+    applyDashboardData(dashboardCache);
+    setRefreshState('success', 'Live data loaded');
 
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
-
-            // Update proxy types
-            const typesContainer = document.getElementById('proxy-types');
-            if (typesContainer && data.proxies.byType) {
-                typesContainer.innerHTML = '';
-                Object.keys(data.proxies.byType).sort().forEach(type => {
-                    const div = document.createElement('div');
-                    div.style.margin = '5px 0';
-                    div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${data.proxies.byType[type]}`;
-                    typesContainer.appendChild(div);
-                });
-            }
-
-            // Update proxy sample
-            const sampleContainer = document.getElementById('proxy-sample');
-            if (sampleContainer && data.proxies.sample) {
-                sampleContainer.innerHTML = '';
-                if (data.proxies.sample.length === 0) {
-                    sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
-                } else {
-                    data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
-                    });
-                }
-            }
-
-            // Update logs
-            updateLog('proxy-log', data.logs.proxy);
-            updateLog('rotation-log', data.logs.rotation);
-        })
-        .catch(() => {
-            console.log('Dashboard refresh failed, will retry...');
-        });
-}
-
-function updateLog(elementId, lines) {
-    const target = document.getElementById(elementId);
-    if (!target) return;
-    
-    target.innerHTML = '';
-    if (!lines || lines.length === 0) {
-        target.textContent = 'No data available.';
-        return;
+    if (gatewaySearch && gatewaySearch.value) {
+        filterGatewayCards(gatewaySearch.value);
     }
-    
-    lines.forEach(line => {
-        target.innerHTML += line + '<br>';
-    });
-}
 
-// Auto-refresh every 15 seconds
-setInterval(refreshDashboard, 15000);
+    setInterval(() => {
+        refreshDashboard();
+    }, 15000);
 
-// Initial update timestamp
-setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
-}, 1000);
+    setInterval(() => {
+        if (lastUpdateEl) {
+            lastUpdateEl.textContent = '⏱️ ' + new Date().toLocaleTimeString();
+        }
+    }, 1000);
 
-console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
-console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
-console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+    console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
+    console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
+    console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+})();
 </script>
 </body>
 </html>
