@@ -68,11 +68,8 @@ class RestAPI {
                 )
             ");
             
-            // Create default admin user if not exists
-            $stmt = $this->db->query("SELECT COUNT(*) FROM api_users");
-            if ($stmt->fetchColumn() == 0) {
-                $this->createUser('admin', 'admin123', 'admin@localhost', 'admin');
-            }
+            // No default users - must be created manually for security
+            // Use api_create_user.php to create your first admin user
             
         } catch (PDOException $e) {
             error_log("RestAPI DB Error: " . $e->getMessage());
