@@ -567,6 +567,8 @@ if ('serviceWorker' in navigator) {
             <p>Kick off high-speed proxy acquisition or run API-mode automation.</p>
             <a href="fetch_proxies.php" class="btn btn-success" target="_blank">🚀 Fetch &amp; Test Proxies</a>
             <a href="fetch_proxies.php?api=1" class="btn" target="_blank">📊 API Mode (JSON)</a>
+            <a href="download_proxies.php" class="btn btn-warning" target="_blank">📥 Download Proxy List</a>
+            <a href="download_proxies.php?format=json" class="btn" target="_blank">📄 Download JSON</a>
             <div style="margin-top:15px; padding:14px; background:#f8f9ff; border-radius:12px; border:1px solid #e0e3ff;">
                 <h3 style="font-size:15px; color:#334; margin-bottom:10px;">🎛️ Quick Launch</h3>
                 <form action="fetch_proxies.php" method="get" target="_blank" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px; align-items:end;">
@@ -668,6 +670,7 @@ curl https://localhost/autosh.php?cc=...<br>
             <p>Verify runtime readiness before high-volume operations.</p>
             <a href="health.php" class="btn" target="_blank">🩻 Health Report</a>
             <a href="proxy_cache_refresh.php?auto=1" class="btn btn-warning" target="_blank">♻️ Force Health Check</a>
+            <a href="test_improvements.php" class="btn btn-success" target="_blank">🧪 Test New Features</a>
             <div class="metric">
                 <strong>Last Health Sweep</strong>
                 <span id="health-last"><?= h($dashboard['system']['lastHealthCheckHuman']) ?></span>
@@ -694,6 +697,8 @@ START_SERVER.bat # Windows
         <p><strong>Smart Testing:</strong> Adaptive timeouts + protocol auto-detection.</p>
         <p><strong>Analytics:</strong> JSON stats for automation flows (<code>?api=1</code>).</p>
         <p><strong>Auto-curation:</strong> Only functional proxies persisted to `ProxyList.txt`.</p>
+        <p><strong>Download API:</strong> Get proxies in TXT/JSON format with filters (<code>download_proxies.php</code>).</p>
+        <p><strong>Auto-Fetch:</strong> Automatic proxy fetching when list is empty or stale.</p>
     </div>
 
     <div class="info-box" style="background:#fff7ed;border-left-color:#fb923c;">

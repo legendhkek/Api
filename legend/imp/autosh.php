@@ -24,11 +24,27 @@ $ua = $agent->generate('windows');
 
 // Proxy rotation setup: use ProxyManager to rotate proxy each request when available
 require_once 'ProxyManager.php';
+require_once 'AutoProxyFetcher.php';
+require_once 'CaptchaSolver.php';
+
+// Auto-fetch proxies if needed
+$autoFetcher = new AutoProxyFetcher(['debug' => isset($_GET['debug'])]);
+if ($autoFetcher->needsFetch()) {
+    error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
+    $fetchResult = $autoFetcher->ensureProxies();
+    if ($fetchResult['success'] && $fetchResult['fetched']) {
+        error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
+    }
+}
+
 $__pm = new ProxyManager();
 $__pm_count = file_exists('ProxyList.txt') ? $__pm->loadFromFile('ProxyList.txt') : 0;
 if (isset($_GET['debug'])) {
     error_log("[DEBUG] Loaded $__pm_count proxies from ProxyList.txt");
 }
+
+// Initialize captcha solver
+$captchaSolver = new CaptchaSolver(isset($_GET['debug']));
 // Default: do NOT auto-rotate proxy per request (opt-in via ?rotate=1)
 $ROTATE_PROXY_PER_REQUEST = false;
 // Optional runtime override: rotate=1|0 (ignored if a specific ?proxy= is supplied)
