@@ -1695,11 +1695,11 @@ if (!$noproxy_requested && !$proxy_used && $require_proxy) {
 
 
 // Validate CC parameter
-if (!isset($_GET['cc']) || empty($_GET['cc'])) {
+if (!isset($_GET['cc']) || empty(trim((string)$_GET['cc']))) {
     send_final_response(['Response' => 'CC parameter is required'], false, '', '');
 }
 
-$cc1 = $_GET['cc'];
+$cc1 = trim((string)$_GET['cc']);
 $cc_partes = explode("|", $cc1);
 
 if (count($cc_partes) < 4) {
