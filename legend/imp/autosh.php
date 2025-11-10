@@ -2206,7 +2206,16 @@ if (empty($minPriceProductId)) {
 }
 
 $urlbase = $site1;
-$domain = parse_url($urlbase, PHP_URL_HOST); 
+$domain = parse_url($urlbase, PHP_URL_HOST);
+// Validate domain is extracted correctly
+if (empty($domain)) {
+    $err = 'Domain extraction failed - Invalid site URL';
+    $result_data = [
+        'Response' => $err,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    exit;
+}
 $cookie = 'cookie_'.uniqid('', true).'.txt';
 $GLOBALS['__cookie_file'] = $cookie;
 $prodid = $minPriceProductId;
@@ -2376,6 +2385,16 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'sec-fetch-site: same-site',
     'user-agent: '.flow_user_agent(),
 ]);
+// Double-check domain is set before using in payment_session_scope
+if (empty($domain)) {
+    $err = 'Domain is empty - cannot create payment session';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    exit;
+}
 curl_setopt($ch, CURLOPT_POSTFIELDS, '{"credit_card":{"number":"'.$cc.'","month":'.$sub_month.',"year":'.$year.',"verification_value":"'.$cvv.'","start_month":null,"start_year":null,"issue_number":"","name":"'.$firstname.' '.$lastname.'"},"payment_session_scope":"'.$domain.'"}');
 $response2 = curl_exec($ch);
 $curlErr = curl_errno($ch);
@@ -2447,6 +2466,15 @@ curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
     'Expect:',
 ]);
 $proposalQuery = extractOperationQueryFromFile('jsonp.php', 'Proposal');
+if (empty($proposalQuery)) {
+    $err = 'Failed to extract Proposal query from jsonp.php';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    exit;
+}
 $proposalPayload = [
         'query' => $proposalQuery,
         'variables' => [
@@ -2817,7 +2845,18 @@ if (empty($handle)) {
 //]);
 //    echo $resultg;
 if ($totalamt == '10.98' && $currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $submitQuery = extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion');
+    if (empty($submitQuery)) {
+        $err = 'Failed to extract SubmitForCompletion query from jsonp.php';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        exit;
+    }
+    $postf = json_encode(['query' => $submitQuery,
                 'variables' => [
                     'input' => [
                         'sessionInput' => [
@@ -3017,7 +3056,18 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
             ]);
 }
 elseif ($currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $submitQuery = extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion');
+    if (empty($submitQuery)) {
+        $err = 'Failed to extract SubmitForCompletion query from jsonp.php';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        exit;
+    }
+    $postf = json_encode(['query' => $submitQuery,
             'variables' => [
                 'input' => [
                     'sessionInput' => [
@@ -3234,7 +3284,18 @@ elseif ($currencycode == 'USD') {
         ]);    
 } 
 elseif ($currencycode == 'NZD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $submitQuery = extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion');
+    if (empty($submitQuery)) {
+        $err = 'Failed to extract SubmitForCompletion query from jsonp.php';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        exit;
+    }
+    $postf = json_encode(['query' => $submitQuery,
         'variables' => [
             'input' => [
                 'sessionInput' => [
@@ -3435,8 +3496,20 @@ elseif ($currencycode == 'NZD') {
     ]);
 }
 
- else {$postf = json_encode([
- 'query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),  
+ else {
+    $submitQuery = extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion');
+    if (empty($submitQuery)) {
+        $err = 'Failed to extract SubmitForCompletion query from jsonp.php';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        exit;
+    }
+    $postf = json_encode([
+ 'query' => $submitQuery,  
          'variables' => [
              'input' => [
                  'sessionInput' => [
@@ -3752,8 +3825,19 @@ elseif ($currencycode == 'NZD') {
  
  
  poll:
+ $pollQuery = extractOperationQueryFromFile('jsonp.php', 'PollForReceipt');
+ if (empty($pollQuery)) {
+     $err = 'Failed to extract PollForReceipt query from jsonp.php';
+     $result_data = [
+         'Response' => $err,
+         'Price'=> $minPrice,
+         'Gateway' => $gateway,
+     ];
+     send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+     exit;
+ }
  $postf2 = json_encode([
-     'query' => extractOperationQueryFromFile('jsonp.php', 'PollForReceipt'),
+     'query' => $pollQuery,
      'variables' => [
          'receiptId' => $recipt_id,
          'sessionToken' => $x_checkout_one_session_token
