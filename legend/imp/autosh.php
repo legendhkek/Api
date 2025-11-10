@@ -1700,46 +1700,41 @@ if (!isset($_GET['cc']) || empty($_GET['cc'])) {
 }
 
 $cc1 = $_GET['cc'];
-$cc_partes = explode("|", $cc1);
+$cc_partes = array_map('trim', explode("|", (string) $cc1));
 
 if (count($cc_partes) < 4) {
     send_final_response(['Response' => 'Invalid CC format. Use: cc|month|year|cvv'], false, '', '');
 }
 
-$cc = $cc_partes[0];
-$month = $cc_partes[1];
-$year = $cc_partes[2];
-$cvv = $cc_partes[3];
-/*=====  sub_month  ======*/
-$yearcont=strlen($year);
-if ($yearcont<=2){
-$year = "20$year";
+list($cc, $month, $year, $cvv) = $cc_partes;
+
+if ($cc === '' || $month === '' || $year === '' || $cvv === '') {
+    send_final_response(['Response' => 'Invalid CC format. Card number, expiry month/year, and CVV are required.'], false, '', '');
 }
-if($month == "01"){
-$sub_month = "1";
-}elseif($month == "02"){
-$sub_month = "2";
-}elseif($month == "03"){
-$sub_month = "3";
-}elseif($month == "04"){
-$sub_month = "4";
-}elseif($month == "05"){
-$sub_month = "5";
-}elseif($month == "06"){
-$sub_month = "6";
-}elseif($month == "07"){
-$sub_month = "7";
-}elseif($month == "08"){
-$sub_month = "8";
-}elseif($month == "09"){
-$sub_month = "9";
-}elseif($month == "10"){
-$sub_month = "10";
-}elseif($month == "11"){
-$sub_month = "11";
-}elseif($month == "12"){
-$sub_month = "12";
+
+$cc = preg_replace('/\D+/', '', $cc);
+if ($cc === '' || strlen($cc) < 12 || strlen($cc) > 19) {
+    send_final_response(['Response' => 'Invalid card number supplied'], false, '', '');
 }
+
+if (!preg_match('/^(0?[1-9]|1[0-2])$/', $month)) {
+    send_final_response(['Response' => 'Invalid expiry month supplied'], false, '', '');
+}
+$month = str_pad((string) ((int) $month), 2, '0', STR_PAD_LEFT);
+
+if (!preg_match('/^\d{2,4}$/', $year)) {
+    send_final_response(['Response' => 'Invalid expiry year supplied'], false, '', '');
+}
+if (strlen($year) === 2) {
+    $year = '20' . $year;
+}
+
+$cvv = preg_replace('/\D+/', '', $cvv);
+if ($cvv === '' || !preg_match('/^\d{3,4}$/', $cvv)) {
+    send_final_response(['Response' => 'Invalid CVV supplied'], false, '', '');
+}
+
+$sub_month = (string) ((int) $month);
 
 $geoaddressParts = array_filter([
     $num_us !== '' ? $num_us : null,
