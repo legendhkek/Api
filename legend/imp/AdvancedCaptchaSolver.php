@@ -49,12 +49,18 @@ class AdvancedCaptchaSolver extends CaptchaSolver {
             $processed = $this->preprocessImage($img);
             
             // Extract text based on type
-            $text = match($type) {
-                'numeric' => $this->extractNumericText($processed),
-                'alphanumeric' => $this->extractAlphanumericText($processed),
-                'simple' => $this->extractSimpleText($processed),
-                default => $this->extractSimpleText($processed)
-            };
+            switch($type) {
+                case 'numeric':
+                    $text = $this->extractNumericText($processed);
+                    break;
+                case 'alphanumeric':
+                    $text = $this->extractAlphanumericText($processed);
+                    break;
+                case 'simple':
+                default:
+                    $text = $this->extractSimpleText($processed);
+                    break;
+            }
             
             // Clean up
             imagedestroy($img);
