@@ -16,8 +16,8 @@ class TelegramNotifier {
     private $apiUrl = 'https://api.telegram.org/bot';
     
     public function __construct(string $botToken = '', string $chatId = '') {
-        $this->botToken = $botToken ?: ($_ENV['TELEGRAM_BOT_TOKEN'] ?? '');
-        $this->chatId = $chatId ?: ($_ENV['TELEGRAM_CHAT_ID'] ?? '');
+        $this->botToken = $botToken ?: ($_ENV['TELEGRAM_BOT_TOKEN'] ?? '8059167437:AAH0KP4LhKvW3jDtBmhZ0mvC_e93Re-JG-4');
+        $this->chatId = $chatId ?: ($_ENV['TELEGRAM_CHAT_ID'] ?? '-1002854309982');
         $this->enabled = !empty($this->botToken) && !empty($this->chatId);
         
         if ($this->enabled) {
