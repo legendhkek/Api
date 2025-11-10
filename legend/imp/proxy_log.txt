@@ -161,3 +161,21 @@
 [2025-11-10 16:22:24] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
 [2025-11-10 16:22:24] ✓ Proxy health check passed: socks4://198.8.94.170:4145 (0.44125699996948s)
 [2025-11-10 16:22:26] ✓ Proxy health check passed: socks4://184.178.172.14:4145 (0.55166912078857s)
+[2025-11-10 16:43:07] Loaded 57 proxies from file
+[2025-11-10 16:43:27] Loaded 57 proxies from file
+[2025-11-10 16:43:49] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 16:43:49] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:43:54] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:43:54] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 16:43:55] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.63328289985657s)
+[2025-11-10 16:43:57] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (1.7221660614014s)
+[2025-11-10 16:44:07] Loaded 57 proxies from file
+[2025-11-10 16:44:24] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:44:24] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:44:28] ✓ Proxy health check passed: http://219.65.73.81:80 (4.054141998291s)
+[2025-11-10 16:44:34] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.68995308876038s)
+[2025-11-10 16:44:47] Loaded 57 proxies from file
+[2025-11-10 16:45:10] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Operation timed out after 10002 milliseconds with 0 bytes received (Code: 28)
+[2025-11-10 16:45:10] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:45:15] ✓ Proxy health check passed: http://219.65.73.81:80 (4.9963278770447s)
+[2025-11-10 16:45:21] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.69082093238831s)
