@@ -5,6 +5,22 @@
  * Keeps only working proxies in ProxyList.txt
  */
 
+// Load environment variables (if present) for Telegram credentials
+if (file_exists(__DIR__ . '/.env')) {
+    $env = parse_ini_file(__DIR__ . '/.env');
+    foreach ($env as $key => $value) {
+        $_ENV[$key] = $value;
+    }
+}
+
+// Initialize Telegram notifier (optional)
+$telegramNotifier = null;
+if (file_exists(__DIR__ . '/TelegramNotifier.php')) {
+    require_once __DIR__ . '/TelegramNotifier.php';
+    $telegramNotifier = new TelegramNotifier();
+}
+$lastHealthError = null;
+
 $cacheFile = __DIR__ . '/proxy_check_time.txt';
 $proxyListFile = __DIR__ . '/ProxyList.txt';
 $checkInterval = 1 * 60 * 60; // 1 hour in seconds
@@ -159,14 +175,19 @@ function testProxiesInParallelHealth(array $proxies, int $timeout = 5, int $conc
  * Check all proxies and keep only working ones
  */
 function checkAndFilterProxies($proxyListFile) {
+    global $lastHealthError;
+    $lastHealthError = null;
+
     if (!file_exists($proxyListFile)) {
         echo "❌ ProxyList.txt not found\n";
+        $lastHealthError = 'ProxyList.txt not found';
         return false;
     }
     
     $proxies = file($proxyListFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if (empty($proxies)) {
         echo "❌ No proxies in ProxyList.txt\n";
+        $lastHealthError = 'No proxies available in ProxyList.txt';
         return false;
     }
     
@@ -195,13 +216,14 @@ function checkAndFilterProxies($proxyListFile) {
  * Update proxy list with only working proxies
  */
 function updateProxyList() {
-    global $cacheFile, $proxyListFile;
+    global $cacheFile, $proxyListFile, $telegramNotifier, $lastHealthError;
     
     echo "🔄 Checking proxy health...\n\n";
     
     $result = checkAndFilterProxies($proxyListFile);
     
     if ($result === false) {
+        notifyTelegramHealthFailure($lastHealthError ?: 'Proxy health check failed');
         return false;
     }
     
@@ -220,6 +242,7 @@ function updateProxyList() {
     if (empty($result['working'])) {
         echo "⚠️  WARNING: No working proxies found!\n";
         echo "❌ ProxyList.txt NOT updated (keeping old list)\n";
+        notifyTelegramHealthFailure('Proxy health check completed but no working proxies were found');
         return false;
     }
     
@@ -235,7 +258,69 @@ function updateProxyList() {
     echo "✅ ProxyList.txt updated with $workingCount working proxy(ies)\n";
     echo "⏰ Next check in 1 hour\n";
     
+    notifyTelegramHealthSuccess($result);
+    $lastHealthError = null;
+    
     return true;
+}
+
+/**
+ * Escape text for safe Telegram HTML messages
+ */
+function htmlEscape(string $text): string {
+    return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/**
+ * Send success summary to Telegram
+ */
+function notifyTelegramHealthSuccess(array $result): void {
+    global $telegramNotifier;
+    
+    if (!$telegramNotifier || !$telegramNotifier->isEnabled()) {
+        return;
+    }
+    
+    $total = $result['total'] ?? (count($result['working']) + count($result['dead']));
+    $workingCount = count($result['working']);
+    $deadCount = count($result['dead']);
+    $successRate = $total > 0 ? round(($workingCount / $total) * 100, 1) : 0;
+    
+    $message  = "✅ <b>Background Proxy Health Check</b>\n\n";
+    $message .= "• Total tested: $total\n";
+    $message .= "• Working: $workingCount\n";
+    $message .= "• Dead: $deadCount\n";
+    $message .= "• Success rate: {$successRate}%\n";
+    $message .= "• Checked at: " . date('Y-m-d H:i:s') . "\n";
+    
+    if ($workingCount > 0) {
+        $sampleSize = min(10, $workingCount);
+        $sample = array_slice($result['working'], 0, $sampleSize);
+        $message .= "\n<b>Sample proxies:</b>\n<pre>" . htmlEscape(implode("\n", $sample)) . "</pre>";
+        if ($workingCount > $sampleSize) {
+            $message .= "\n+" . ($workingCount - $sampleSize) . " more";
+        }
+    }
+    
+    $telegramNotifier->sendMessage($message);
+}
+
+/**
+ * Send failure notification to Telegram
+ */
+function notifyTelegramHealthFailure(string $reason): void {
+    global $telegramNotifier;
+    
+    if (!$telegramNotifier || !$telegramNotifier->isEnabled()) {
+        return;
+    }
+    
+    $details = "Background proxy health check failed.\nReason: " . $reason;
+    $telegramNotifier->sendAlert(
+        'Proxy Health Check Failed',
+        htmlEscape($details),
+        'critical'
+    );
 }
 
 /**
