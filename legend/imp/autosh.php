@@ -221,9 +221,53 @@ $city_us = $randomAddress['city'];
 $state_us = $randomAddress['state'];
 $zip_us = $randomAddress['zip'];
 
+$inputStreet = filter_input(INPUT_GET, 'street_address', FILTER_UNSAFE_RAW);
+if (is_string($inputStreet)) {
+    $inputStreet = trim($inputStreet);
+    if ($inputStreet !== '') {
+        $address = $inputStreet;
+        $address_us = $inputStreet;
+        if (preg_match('/^\d+/', $inputStreet, $matches)) {
+            $num_us = $matches[0];
+        }
+    }
+}
+
+$inputCity = filter_input(INPUT_GET, 'city', FILTER_UNSAFE_RAW);
+if (is_string($inputCity)) {
+    $inputCity = trim($inputCity);
+    if ($inputCity !== '') {
+        $city_us = $inputCity;
+    }
+}
+
+$inputState = filter_input(INPUT_GET, 'state', FILTER_UNSAFE_RAW);
+if (is_string($inputState)) {
+    $inputState = trim($inputState);
+    if ($inputState !== '') {
+        $state_us = strtoupper($inputState);
+    }
+}
+
+$inputPostal = filter_input(INPUT_GET, 'postal_code', FILTER_UNSAFE_RAW);
+if (is_string($inputPostal)) {
+    $inputPostal = trim($inputPostal);
+    if ($inputPostal !== '') {
+        $zip_us = $inputPostal;
+    }
+}
+
 require_once 'no.php';
 $areaCode = $areaCodes[array_rand($areaCodes)];
 $phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+
+$inputPhone = filter_input(INPUT_GET, 'phone', FILTER_UNSAFE_RAW);
+if (is_string($inputPhone)) {
+    $inputPhone = trim($inputPhone);
+    if ($inputPhone !== '') {
+        $phone = $inputPhone;
+    }
+}
 
 // Important functions start
 // Lightweight embedded utilities: CaptchaSolver and GatewayDetector
@@ -1724,6 +1768,30 @@ $lastname = find_between($resposta, '"last":"', '"');
 
 // Set your own email directly
 $email = "sarthakgrid@gmail.com"; // Replace with your actual email
+
+$inputFirst = filter_input(INPUT_GET, 'first_name', FILTER_UNSAFE_RAW);
+if (is_string($inputFirst)) {
+    $inputFirst = trim($inputFirst);
+    if ($inputFirst !== '') {
+        $firstname = $inputFirst;
+    }
+}
+
+$inputLast = filter_input(INPUT_GET, 'last_name', FILTER_UNSAFE_RAW);
+if (is_string($inputLast)) {
+    $inputLast = trim($inputLast);
+    if ($inputLast !== '') {
+        $lastname = $inputLast;
+    }
+}
+
+$inputEmail = filter_input(INPUT_GET, 'email', FILTER_UNSAFE_RAW);
+if (is_string($inputEmail)) {
+    $inputEmail = trim($inputEmail);
+    if ($inputEmail !== '') {
+        $email = $inputEmail;
+    }
+}
 
 function getMinimumPriceProductDetails(string $json): array {
     $data = json_decode($json, true);

