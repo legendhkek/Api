@@ -163,18 +163,28 @@ class RestAPI {
         $endpoint = $route['endpoint'];
         $params = $route['params'];
         
-        return match($endpoint) {
-            'login' => $this->handleLogin(),
-            'register' => $this->handleRegister(),
-            'proxies' => $this->handleProxies($method, $params),
-            'fetch' => $this->handleFetch(),
-            'analytics' => $this->handleAnalytics($params),
-            'health' => $this->handleHealth(),
-            'test' => $this->handleTest($params),
-            'users' => $this->handleUsers($method, $params),
-            'notifications' => $this->handleNotifications($method),
-            default => $this->errorResponse('Endpoint not found', 404)
-        };
+        switch ($endpoint) {
+            case 'login':
+                return $this->handleLogin();
+            case 'register':
+                return $this->handleRegister();
+            case 'proxies':
+                return $this->handleProxies($method, $params);
+            case 'fetch':
+                return $this->handleFetch();
+            case 'analytics':
+                return $this->handleAnalytics($params);
+            case 'health':
+                return $this->handleHealth();
+            case 'test':
+                return $this->handleTest($params);
+            case 'users':
+                return $this->handleUsers($method, $params);
+            case 'notifications':
+                return $this->handleNotifications($method);
+            default:
+                return $this->errorResponse('Endpoint not found', 404);
+        }
     }
     
     /**

@@ -114,12 +114,16 @@ class WebSocketServer {
             return ['error' => 'Invalid message format'];
         }
         
-        return match($data['type']) {
-            'get_analytics' => $this->getAnalyticsData(),
-            'get_proxies' => $this->getProxiesData(),
-            'get_health' => $this->getHealthData(),
-            default => ['error' => 'Unknown message type']
-        };
+        switch ($data['type']) {
+            case 'get_analytics':
+                return $this->getAnalyticsData();
+            case 'get_proxies':
+                return $this->getProxiesData();
+            case 'get_health':
+                return $this->getHealthData();
+            default:
+                return ['error' => 'Unknown message type'];
+        }
     }
     
     /**

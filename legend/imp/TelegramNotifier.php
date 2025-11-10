@@ -72,12 +72,20 @@ class TelegramNotifier {
      * @param string $level Alert level (info, warning, critical)
      */
     public function sendAlert(string $title, string $details, string $level = 'info'): bool {
-        $emoji = match($level) {
-            'critical' => '🚨',
-            'warning' => '⚠️',
-            'info' => 'ℹ️',
-            default => '📢'
-        };
+        switch ($level) {
+            case 'critical':
+                $emoji = '🚨';
+                break;
+            case 'warning':
+                $emoji = '⚠️';
+                break;
+            case 'info':
+                $emoji = 'ℹ️';
+                break;
+            default:
+                $emoji = '📢';
+                break;
+        }
         
         $message = "$emoji <b>$title</b>\n\n";
         $message .= "$details\n";
