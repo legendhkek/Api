@@ -312,31 +312,46 @@ function h($value): string
             --light: #f8fafc;
             --gray: #64748b;
             --border: #e2e8f0;
+            --border-soft: rgba(226, 232, 240, 0.6);
+            --surface: rgba(255, 255, 255, 0.95);
+            --surface-strong: rgba(255, 255, 255, 0.98);
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --transition-base: 0.35s ease;
+            --card-glow: rgba(99, 102, 241, 0.2);
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             min-height: 100vh;
             padding: 20px;
             color: var(--dark);
             line-height: 1.6;
+            position: relative;
+            overflow-x: hidden;
+            transition: background 0.6s ease, color var(--transition-base);
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
+            z-index: 2;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.98);
+            background: var(--surface-strong);
             border-radius: 20px;
             padding: 40px;
             margin-bottom: 30px;
-            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
             position: relative;
             overflow: hidden;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border: 1px solid var(--border-soft);
         }
 
         .header::before {
@@ -427,11 +442,15 @@ function h($value): string
             display: flex;
             gap: 10px;
             margin-bottom: 25px;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.9);
             padding: 15px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
             overflow-x: auto;
+            position: sticky;
+            top: 20px;
+            z-index: 5;
+            backdrop-filter: blur(12px);
         }
 
         .tab {
@@ -443,20 +462,23 @@ function h($value): string
             font-size: 14px;
             font-weight: 600;
             color: var(--gray);
-            transition: all 0.3s ease;
+            transition: all var(--transition-base);
             white-space: nowrap;
+            backdrop-filter: blur(4px);
         }
 
-        .tab:hover {
-            background: var(--light);
+        .tab:hover,
+        .tab:focus {
+            background: rgba(99, 102, 241, 0.08);
             border-color: var(--primary);
+            color: var(--primary);
         }
 
         .tab.active {
             background: var(--primary);
             color: white;
             border-color: var(--primary);
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
         }
 
         .tab-content {
@@ -481,13 +503,14 @@ function h($value): string
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.98);
+            background: var(--surface);
             border-radius: 20px;
             padding: 30px;
-            box-shadow: 0 15px 40px rgba(15, 23, 42, 0.2);
-            transition: all 0.3s ease;
+            box-shadow: 0 15px 40px rgba(15, 23, 42, 0.18);
+            transition: all 0.4s ease;
             position: relative;
             overflow: hidden;
+            border: 1px solid var(--border-soft);
         }
 
         .card::before {
@@ -502,7 +525,7 @@ function h($value): string
 
         .card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.2);
         }
 
         .card h2 {
@@ -735,10 +758,12 @@ function h($value): string
         .stats-card {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
-            border-radius: 15px;
+            border-radius: 16px;
             padding: 25px;
             text-align: center;
-            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 14px 34px rgba(99, 102, 241, 0.32);
+            position: relative;
+            overflow: hidden;
         }
 
         .stats-card h3 {
@@ -783,11 +808,513 @@ function h($value): string
             border-color: var(--primary);
         }
 
+        .header-top {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .glass-button {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(255, 255, 255, 0.45);
+            color: #1e293b;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+            backdrop-filter: blur(18px);
+        }
+
+        .glass-button .btn-icon {
+            font-size: 16px;
+        }
+
+        .glass-button .glass-label {
+            font-size: 14px;
+        }
+
+        .glass-button .glass-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(30, 41, 59, 0.2);
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+
+        .glass-button.loading {
+            pointer-events: none;
+            opacity: 0.8;
+            cursor: wait;
+        }
+
+        .glass-button.loading .glass-spinner {
+            display: inline-block;
+        }
+
+        .glass-button:hover,
+        .glass-button:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .theme-toggle {
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            justify-content: center;
+        }
+
+        .theme-toggle .theme-icon {
+            font-size: 20px;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .theme-toggle .moon {
+            position: absolute;
+            opacity: 0;
+            transform: translateY(10px) scale(0.9);
+        }
+
+        .theme-toggle .sun {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .insights-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .insight-card {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 18px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.2);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .insight-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 55%);
+            opacity: 0;
+            transition: opacity var(--transition-base);
+        }
+
+        .insight-card:hover::after {
+            opacity: 1;
+        }
+
+        .progress-ring {
+            --value: 0;
+            width: 108px;
+            height: 108px;
+            border-radius: 50%;
+            background: conic-gradient(var(--primary) calc(var(--value) * 1%), rgba(99, 102, 241, 0.12) 0);
+            display: grid;
+            place-items: center;
+            position: relative;
+        }
+
+        .progress-ring::after {
+            content: "";
+            position: absolute;
+            inset: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: inset 0 4px 10px rgba(15, 23, 42, 0.12);
+        }
+
+        .progress-value {
+            position: relative;
+            font-weight: 700;
+            font-size: 22px;
+            color: var(--dark);
+        }
+
+        .insight-details h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 6px;
+        }
+
+        .insight-details p {
+            color: var(--gray);
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .insight-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .insight-pills .pill {
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary-dark);
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .insight-pills .pill strong {
+            font-size: 13px;
+        }
+
+        .insight-gauge {
+            flex: 0 0 110px;
+            height: 110px;
+            display: grid;
+            place-items: center;
+        }
+
+        .gauge-track {
+            width: 90px;
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.12);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gauge-bar {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--success), var(--primary));
+            width: calc(var(--value, 0) * 1%);
+            transition: width 0.6s ease;
+        }
+
+        .insight-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+            display: grid;
+            place-items: center;
+            font-size: 26px;
+            color: var(--primary);
+            box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.18);
+        }
+
+        .floating-panel {
+            position: fixed;
+            right: 28px;
+            bottom: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 16px;
+            border-radius: 20px;
+            background: rgba(15, 23, 42, 0.82);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(18px);
+            z-index: 50;
+        }
+
+        .floating-panel button {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            background: transparent;
+            color: rgba(248, 250, 252, 0.85);
+            cursor: pointer;
+            transition: all var(--transition-base);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .floating-panel button:hover,
+        .floating-panel button.active {
+            background: rgba(99, 102, 241, 0.18);
+            color: #ffffff;
+        }
+
+        .background-aurora {
+            position: fixed;
+            width: 620px;
+            height: 620px;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.28), transparent 60%);
+            filter: blur(70px);
+            opacity: 0.8;
+            z-index: 0;
+            pointer-events: none;
+            animation: drift 22s linear infinite;
+        }
+
+        .background-aurora--alt {
+            top: auto;
+            bottom: -220px;
+            right: -160px;
+            left: auto;
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.28), transparent 60%);
+            animation-duration: 26s;
+            animation-direction: reverse;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(-10%, -5%) scale(1); }
+            50% { transform: translate(6%, 10%) scale(1.05); }
+            100% { transform: translate(-10%, -5%) scale(1); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.45);
+            border-radius: 999px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.65);
+        }
+
+        body.theme-dark {
+            --bg-gradient: radial-gradient(circle at top left, rgba(15, 23, 42, 0.88), rgba(76, 29, 149, 0.85) 45%, rgba(30, 58, 138, 0.9) 100%);
+            --gray: #94a3b8;
+            --border: rgba(148, 163, 184, 0.25);
+            --border-soft: rgba(99, 102, 241, 0.22);
+            --light: rgba(15, 23, 42, 0.85);
+            --surface: rgba(15, 23, 42, 0.78);
+            --surface-strong: rgba(15, 23, 42, 0.85);
+            --dark: #f1f5f9;
+            color: #e2e8f0;
+        }
+
+        body.theme-dark h1 {
+            color: #c7d2fe;
+        }
+
+        body.theme-dark .subtitle {
+            color: #cbd5f5;
+        }
+
+        body.theme-dark .header {
+            background: rgba(15, 23, 42, 0.85);
+            border-color: rgba(99, 102, 241, 0.25);
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45);
+        }
+
+        body.theme-dark .header::before {
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.2), transparent 70%);
+        }
+
+        body.theme-dark .tabs {
+            background: rgba(15, 23, 42, 0.82);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.45);
+        }
+
+        body.theme-dark .tab {
+            border-color: rgba(148, 163, 184, 0.2);
+            color: #cbd5f5;
+        }
+
+        body.theme-dark .tab:hover,
+        body.theme-dark .tab:focus {
+            background: rgba(99, 102, 241, 0.18);
+            color: #f8fafc;
+        }
+
+        body.theme-dark .tab.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(76, 29, 149, 0.85));
+            box-shadow: 0 8px 22px rgba(99, 102, 241, 0.5);
+        }
+
+        body.theme-dark .card {
+            background: rgba(15, 23, 42, 0.78);
+            border-color: rgba(99, 102, 241, 0.22);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.5);
+        }
+
+        body.theme-dark .card h2,
+        body.theme-dark .metric strong {
+            color: #f8fafc;
+        }
+
+        body.theme-dark .card p,
+        body.theme-dark .metric span,
+        body.theme-dark .insight-details p {
+            color: #94a3b8;
+        }
+
+        body.theme-dark .stats-card {
+            box-shadow: 0 18px 45px rgba(59, 130, 246, 0.45);
+        }
+
+        body.theme-dark .log-box {
+            background: rgba(2, 6, 23, 0.95);
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .code-block {
+            background: rgba(15, 23, 42, 0.9);
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .gateway-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+            border-color: rgba(99, 102, 241, 0.2);
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .gateway-card .category {
+            color: #94a3b8;
+        }
+
+        body.theme-dark form {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+        }
+
+        body.theme-dark form label {
+            color: #e2e8f0;
+        }
+
+        body.theme-dark form input,
+        body.theme-dark form select {
+            background: rgba(15, 23, 42, 0.85);
+            color: #e2e8f0;
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+
+        body.theme-dark form input:focus,
+        body.theme-dark form select:focus {
+            border-color: rgba(99, 102, 241, 0.7);
+        }
+
+        body.theme-dark .insight-card {
+            background: rgba(15, 23, 42, 0.78);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.55);
+        }
+
+        body.theme-dark .progress-ring::after {
+            background: rgba(15, 23, 42, 0.85);
+            box-shadow: inset 0 4px 12px rgba(2, 6, 23, 0.45);
+        }
+
+        body.theme-dark .progress-value,
+        body.theme-dark .insight-details h3 {
+            color: #f8fafc;
+        }
+
+        body.theme-dark .insight-pills .pill {
+            background: rgba(99, 102, 241, 0.22);
+            color: #e0e7ff;
+        }
+
+        body.theme-dark .gauge-track {
+            background: rgba(99, 102, 241, 0.25);
+        }
+
+        body.theme-dark .glass-button {
+            background: rgba(30, 41, 59, 0.55);
+            color: #e2e8f0;
+            border-color: rgba(148, 163, 184, 0.25);
+            box-shadow: 0 14px 38px rgba(2, 6, 23, 0.55);
+        }
+
+        body.theme-dark .glass-button .glass-spinner {
+            border-color: rgba(148, 163, 184, 0.3);
+            border-top-color: #c7d2fe;
+        }
+
+        body.theme-dark .floating-panel {
+            background: rgba(15, 23, 42, 0.92);
+            box-shadow: 0 26px 60px rgba(2, 6, 23, 0.65);
+        }
+
+        body.theme-dark .floating-panel button {
+            color: rgba(226, 232, 240, 0.8);
+        }
+
+        body.theme-dark .floating-panel button:hover,
+        body.theme-dark .floating-panel button.active {
+            background: rgba(99, 102, 241, 0.25);
+            color: #ffffff;
+        }
+
+        body.theme-dark .info-box {
+            background: rgba(15, 23, 42, 0.75);
+            color: #e2e8f0;
+        }
+
+        body.theme-dark .info-box.success {
+            background: rgba(6, 78, 59, 0.35);
+            border-left-color: rgba(16, 185, 129, 0.6);
+        }
+
+        body.theme-dark .info-box.warning {
+            background: rgba(120, 53, 15, 0.4);
+            border-left-color: rgba(245, 158, 11, 0.7);
+        }
+
+        body.theme-dark .theme-toggle .sun {
+            opacity: 0;
+            transform: translateY(-10px) scale(0.85);
+        }
+
+        body.theme-dark .theme-toggle .moon {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        body.theme-dark ::-webkit-scrollbar-track {
+            background: rgba(2, 6, 23, 0.55);
+        }
+
+        body.theme-dark ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.55);
+        }
+
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .gateway-grid {
                 grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
             }
@@ -798,6 +1325,33 @@ function h($value): string
 
             .tabs {
                 overflow-x: scroll;
+            }
+
+            .insights-row {
+                grid-template-columns: 1fr;
+            }
+
+            .insight-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .glass-button {
+                width: auto;
+            }
+
+            .floating-panel {
+                display: none;
             }
         }
 
@@ -814,9 +1368,9 @@ function h($value): string
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-    </style>
+</style>
 </head>
-<body>
+<body class="theme-light">
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
@@ -824,9 +1378,24 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
+<div class="background-aurora"></div>
+<div class="background-aurora background-aurora--alt"></div>
 <div class="container">
     <div class="header">
-        <h1><span>🎯</span> Advanced Payment & Proxy Intelligence Hub</h1>
+        <div class="header-top">
+            <h1><span>🎯</span> Advanced Payment & Proxy Intelligence Hub</h1>
+            <div class="header-actions">
+                <button type="button" class="glass-button" id="refresh-now" onclick="refreshDashboard(true)">
+                    <span class="btn-icon">🔄</span>
+                    <span class="glass-label">Sync Now</span>
+                    <span class="glass-spinner" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="glass-button theme-toggle" id="theme-toggle" aria-label="Toggle theme" onclick="toggleTheme()">
+                    <span class="theme-icon sun">☀️</span>
+                    <span class="theme-icon moon">🌙</span>
+                </button>
+            </div>
+        </div>
         <p class="subtitle">
             Enterprise-grade proxy rotation system with multi-gateway payment reconnaissance. 
             Supports <strong>50+ payment gateways</strong> including Stripe, PayPal, Razorpay, PayU, WooCommerce, 
@@ -845,14 +1414,79 @@ if ('serviceWorker' in navigator) {
         </div>
     </div>
 
+    <?php
+    $proxyTotalRaw = (int) $dashboard['proxies']['total'];
+    $proxyTotalBase = max(1, $proxyTotalRaw);
+    $uniquePercent = $proxyTotalRaw > 0 ? (int) round(($dashboard['proxies']['unique'] / $proxyTotalBase) * 100) : 0;
+    $authPercent = $proxyTotalRaw > 0 ? (int) round(($dashboard['proxies']['withAuth'] / $proxyTotalBase) * 100) : 0;
+    $lastUpdatedEpoch = $dashboard['proxies']['lastUpdatedEpoch'];
+    $freshnessPercent = 0;
+    if ($lastUpdatedEpoch) {
+        $ageMinutes = max(0, (time() - $lastUpdatedEpoch) / 60);
+        $freshnessPercent = (int) round(max(0, min(100, 100 - min(100, $ageMinutes * 2.5))));
+    }
+    $concurrencyCap = (int) $dashboard['system']['concurrencyCap'];
+    $coverageRatio = DASHBOARD_CONCURRENCY_LIMIT > 0 ? min(1, $concurrencyCap / DASHBOARD_CONCURRENCY_LIMIT) : 0;
+    $healthScore = (int) round(min(100, ($uniquePercent * 0.55) + ($authPercent * 0.25) + ($freshnessPercent * 0.2) + ($coverageRatio * 20)));
+    $gatewayTotal = count($dashboard['gateways']);
+    $protocolCount = count($dashboard['proxies']['byType']);
+    $sampleCount = count($dashboard['proxies']['sample']);
+    ?>
+    <div class="insights-row">
+        <article class="insight-card">
+            <div class="progress-ring" id="insight-health-ring" style="--value: <?= $healthScore ?>">
+                <span class="progress-value" id="insight-health-value"><?= $healthScore ?>%</span>
+            </div>
+            <div class="insight-details">
+                <h3>Proxy Health Index</h3>
+                <p>Uniqueness and stability derived from current inventory.</p>
+                <div class="insight-pills">
+                    <span class="pill">Unique <strong id="insight-unique-ratio"><?= $uniquePercent ?></strong>%</span>
+                    <span class="pill">Auth <strong id="insight-auth-ratio"><?= $authPercent ?></strong>%</span>
+                </div>
+            </div>
+        </article>
+        <article class="insight-card">
+            <div class="insight-gauge" aria-hidden="true">
+                <div class="gauge-track">
+                    <div class="gauge-bar" id="insight-freshness-bar" style="--value: <?= $freshnessPercent ?>"></div>
+                </div>
+            </div>
+            <div class="insight-details">
+                <h3>Data Freshness</h3>
+                <p>Last update <strong id="insight-last-updated"><?= h($dashboard['proxies']['lastUpdatedHuman']) ?></strong></p>
+                <div class="insight-pills">
+                    <span class="pill">Protocols <strong id="insight-protocol-count"><?= $protocolCount ?></strong></span>
+                    <span class="pill">Sample <strong id="insight-sample-count"><?= $sampleCount ?></strong></span>
+                    <span class="pill">Fresh <strong id="insight-freshness-value"><?= $freshnessPercent ?></strong>%</span>
+                </div>
+            </div>
+        </article>
+        <article class="insight-card">
+            <div class="insight-icon">🤖</div>
+            <div class="insight-details">
+                <h3>Automation Snapshot</h3>
+                <p>
+                    Monitoring <strong id="insight-endpoint-count"><?= count($dashboard['endpoints']) ?></strong> endpoints with
+                    <strong><?= h($concurrencyCap) ?>×</strong> concurrency cap.
+                </p>
+                <div class="insight-pills">
+                    <span class="pill">Gateways <strong><?= $gatewayTotal ?></strong></span>
+                    <span class="pill">Health <strong id="insight-health-check"><?= h($dashboard['system']['lastHealthCheckHuman']) ?></strong></span>
+                    <span class="pill">Server <strong><?= h($dashboard['system']['serverSoftware']) ?></strong></span>
+                </div>
+            </div>
+        </article>
+    </div>
+
     <!-- Navigation Tabs -->
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-        <button class="tab" onclick="switchTab('gateways')">💳 Payment Gateways</button>
-        <button class="tab" onclick="switchTab('proxies')">🌐 Proxy Manager</button>
-        <button class="tab" onclick="switchTab('tools')">🛠️ Tools & Tests</button>
-        <button class="tab" onclick="switchTab('logs')">📈 Logs & Analytics</button>
-        <button class="tab" onclick="switchTab('docs')">📚 Documentation</button>
+        <button class="tab active" type="button" data-tab-target="dashboard" onclick="switchTab('dashboard', this)">📊 Dashboard</button>
+        <button class="tab" type="button" data-tab-target="gateways" onclick="switchTab('gateways', this)">💳 Payment Gateways</button>
+        <button class="tab" type="button" data-tab-target="proxies" onclick="switchTab('proxies', this)">🌐 Proxy Manager</button>
+        <button class="tab" type="button" data-tab-target="tools" onclick="switchTab('tools', this)">🛠️ Tools & Tests</button>
+        <button class="tab" type="button" data-tab-target="logs" onclick="switchTab('logs', this)">📈 Logs & Analytics</button>
+        <button class="tab" type="button" data-tab-target="docs" onclick="switchTab('docs', this)">📚 Documentation</button>
     </div>
 
     <!-- Dashboard Tab -->
@@ -1300,67 +1934,155 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
     </div>
 </div>
 
+<div class="floating-panel" id="quick-nav" aria-label="Quick navigation">
+    <button type="button" data-quick-tab="dashboard" onclick="navigateToTab('dashboard')">📊 Dashboard</button>
+    <button type="button" data-quick-tab="gateways" onclick="navigateToTab('gateways')">💳 Gateways</button>
+    <button type="button" data-quick-tab="proxies" onclick="navigateToTab('proxies')">🌐 Proxies</button>
+    <button type="button" data-quick-tab="tools" onclick="navigateToTab('tools')">🛠️ Tools</button>
+    <button type="button" data-quick-tab="logs" onclick="navigateToTab('logs')">📈 Logs</button>
+    <button type="button" data-quick-tab="docs" onclick="navigateToTab('docs')">📚 Docs</button>
+</div>
+
 <script>
 const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const DASHBOARD_CONCURRENCY_LIMIT = <?= DASHBOARD_CONCURRENCY_LIMIT ?>;
+const THEME_STORAGE_KEY = 'legend-dashboard-theme';
 
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
+function setTextContent(id, value) {
+    const el = document.getElementById(id);
+    if (!el) {
+        return;
+    }
+    el.textContent = value;
 }
 
-// Gateway search filter
+function syncQuickNav(tabName) {
+    document.querySelectorAll('[data-quick-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.quickTab === tabName);
+    });
+}
+
+function switchTab(tabName, trigger) {
+    const targetId = `${tabName}-tab`;
+    const tabPanel = document.getElementById(targetId);
+    if (!tabPanel) {
+        return;
+    }
+
+    document.querySelectorAll('.tab-content').forEach(panel => panel.classList.remove('active'));
+    tabPanel.classList.add('active');
+
+    document.querySelectorAll('.tab').forEach(button => {
+        button.classList.toggle('active', button.dataset.tabTarget === tabName);
+    });
+
+    syncQuickNav(tabName);
+
+    if (trigger && typeof trigger.blur === 'function') {
+        trigger.blur();
+    }
+}
+
+function navigateToTab(tabName) {
+    const tabTrigger = document.querySelector(`.tab[data-tab-target="${tabName}"]`);
+    switchTab(tabName, tabTrigger);
+    const panel = document.getElementById(`${tabName}-tab`);
+    if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
 function filterGateways() {
-    const searchTerm = document.getElementById('gateway-search').value.toLowerCase();
-    const cards = document.querySelectorAll('.gateway-card');
-    
-    cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const category = card.getAttribute('data-category');
-        
-        if (name.includes(searchTerm) || category.includes(searchTerm)) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
-        }
+    const searchInput = document.getElementById('gateway-search');
+    const searchTerm = (searchInput ? searchInput.value : '').toLowerCase();
+    document.querySelectorAll('.gateway-card').forEach(card => {
+        const name = card.dataset.name || '';
+        const category = card.dataset.category || '';
+        const matches = !searchTerm || name.includes(searchTerm) || category.includes(searchTerm);
+        card.style.display = matches ? '' : 'none';
     });
 }
 
-// Refresh dashboard data
-function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
+function setRefreshLoading(isLoading) {
+    const button = document.getElementById('refresh-now');
+    if (!button) {
+        return;
+    }
+    button.classList.toggle('loading', isLoading);
+    button.disabled = isLoading;
+}
+
+function computeInsightMetrics(data) {
+    const total = Math.max(1, Number(data?.proxies?.total) || 0);
+    const unique = Number(data?.proxies?.unique) || 0;
+    const withAuth = Number(data?.proxies?.withAuth) || 0;
+    const uniquePercent = total ? Math.round((unique / total) * 100) : 0;
+    const authPercent = total ? Math.round((withAuth / total) * 100) : 0;
+    const lastUpdatedEpoch = Number(data?.proxies?.lastUpdatedEpoch) || 0;
+    let freshnessPercent = 0;
+    if (lastUpdatedEpoch) {
+        const ageMinutes = Math.max(0, (Date.now() / 1000 - lastUpdatedEpoch) / 60);
+        freshnessPercent = Math.round(Math.max(0, Math.min(100, 100 - Math.min(100, ageMinutes * 2.5))));
+    }
+    const concurrencyCap = Number(data?.system?.concurrencyCap) || 0;
+    const coverageRatio = DASHBOARD_CONCURRENCY_LIMIT > 0 ? Math.min(1, concurrencyCap / DASHBOARD_CONCURRENCY_LIMIT) : 0;
+    const healthScore = Math.round(Math.min(100, (uniquePercent * 0.55) + (authPercent * 0.25) + (freshnessPercent * 0.2) + (coverageRatio * 20)));
+
+    return {
+        healthScore,
+        uniquePercent,
+        authPercent,
+        freshnessPercent,
+        protocolCount: Object.keys(data?.proxies?.byType || {}).length,
+        sampleCount: (data?.proxies?.sample || []).length,
+        lastUpdatedHuman: data?.proxies?.lastUpdatedHuman || 'Never',
+        endpointCount: Object.keys(data?.endpoints || {}).length,
+        healthCheckHuman: data?.system?.lastHealthCheckHuman || 'Never',
+    };
+}
+
+function updateInsightsFromData(data) {
+    const metrics = computeInsightMetrics(data);
+    const healthRing = document.getElementById('insight-health-ring');
+    if (healthRing) {
+        healthRing.style.setProperty('--value', metrics.healthScore);
+    }
+    setTextContent('insight-health-value', `${metrics.healthScore}%`);
+    setTextContent('insight-unique-ratio', metrics.uniquePercent);
+    setTextContent('insight-auth-ratio', metrics.authPercent);
+
+    const freshnessBar = document.getElementById('insight-freshness-bar');
+    if (freshnessBar) {
+        freshnessBar.style.setProperty('--value', metrics.freshnessPercent);
+    }
+    setTextContent('insight-freshness-value', metrics.freshnessPercent);
+    setTextContent('insight-last-updated', metrics.lastUpdatedHuman);
+    setTextContent('insight-protocol-count', metrics.protocolCount);
+    setTextContent('insight-sample-count', metrics.sampleCount);
+    setTextContent('insight-endpoint-count', metrics.endpointCount);
+    setTextContent('insight-health-check', metrics.healthCheckHuman);
+}
+
+function refreshDashboard(manual = false) {
+    if (manual) {
+        setRefreshLoading(true);
+    }
+
+    return fetch('index.php?stats=1', { cache: 'no-store' })
         .then(resp => resp.json())
         .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
+            const updateMetric = (id, value) => setTextContent(id, value);
 
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+            updateMetric('proxy-total', data.proxies.total);
+            updateMetric('proxy-total-stat', data.proxies.total);
+            updateMetric('proxy-unique', data.proxies.unique);
+            updateMetric('proxy-unique-stat', data.proxies.unique);
+            updateMetric('proxy-auth', data.proxies.withAuth);
+            updateMetric('proxy-noauth', data.proxies.withoutAuth);
+            updateMetric('proxy-updated', data.proxies.lastUpdatedHuman);
+            updateMetric('health-last', data.system.lastHealthCheckHuman);
+            updateMetric('last-update', '⏱️ ' + new Date().toLocaleTimeString());
 
-            // Update proxy types
             const typesContainer = document.getElementById('proxy-types');
             if (typesContainer && data.proxies.byType) {
                 typesContainer.innerHTML = '';
@@ -1372,7 +2094,6 @@ function refreshDashboard() {
                 });
             }
 
-            // Update proxy sample
             const sampleContainer = document.getElementById('proxy-sample');
             if (sampleContainer && data.proxies.sample) {
                 sampleContainer.innerHTML = '';
@@ -1380,42 +2101,111 @@ function refreshDashboard() {
                     sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
                 } else {
                     data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
+                        sampleContainer.innerHTML += `${item}<br>`;
                     });
                 }
             }
 
-            // Update logs
             updateLog('proxy-log', data.logs.proxy);
             updateLog('rotation-log', data.logs.rotation);
+            updateInsightsFromData(data);
+
+            Object.assign(dashboardState, data);
         })
         .catch(() => {
             console.log('Dashboard refresh failed, will retry...');
+        })
+        .finally(() => {
+            if (manual) {
+                setRefreshLoading(false);
+            }
         });
 }
 
 function updateLog(elementId, lines) {
     const target = document.getElementById(elementId);
-    if (!target) return;
-    
+    if (!target) {
+        return;
+    }
+
     target.innerHTML = '';
     if (!lines || lines.length === 0) {
         target.textContent = 'No data available.';
         return;
     }
-    
+
     lines.forEach(line => {
-        target.innerHTML += line + '<br>';
+        target.innerHTML += `${line}<br>`;
     });
 }
 
-// Auto-refresh every 15 seconds
-setInterval(refreshDashboard, 15000);
+function applyTheme(theme) {
+    const next = theme === 'dark' ? 'dark' : 'light';
+    document.body.classList.remove('theme-light', 'theme-dark');
+    document.body.classList.add(`theme-${next}`);
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch (_) {
+        // Ignore storage errors
+    }
+}
 
-// Initial update timestamp
-setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
-}, 1000);
+function toggleTheme() {
+    const isDark = document.body.classList.contains('theme-dark');
+    applyTheme(isDark ? 'light' : 'dark');
+}
+
+function initTheme() {
+    try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === 'light' || stored === 'dark') {
+            applyTheme(stored);
+            return;
+        }
+    } catch (_) {
+        // Ignore storage access issues
+    }
+
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+}
+
+const updateClock = () => {
+    setTextContent('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+};
+
+if (window.matchMedia && typeof window.matchMedia === 'function') {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleThemeChange = event => {
+        try {
+            const stored = localStorage.getItem(THEME_STORAGE_KEY);
+            if (stored === 'light' || stored === 'dark') {
+                return;
+            }
+        } catch (_) {
+            return;
+        }
+        applyTheme(event.matches ? 'dark' : 'light');
+    };
+    if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleThemeChange);
+    } else if (mediaQuery.addListener) {
+        mediaQuery.addListener(handleThemeChange);
+    }
+}
+
+function initDashboard() {
+    initTheme();
+    syncQuickNav('dashboard');
+    updateInsightsFromData(dashboardState);
+    updateClock();
+}
+
+initDashboard();
+refreshDashboard();
+
+setInterval(refreshDashboard, 15000);
+setInterval(updateClock, 1000);
 
 console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
 console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
