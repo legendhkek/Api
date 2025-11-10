@@ -10,6 +10,64 @@ $proxyListFile = __DIR__ . '/ProxyList.txt';
 $checkInterval = 1 * 60 * 60; // 1 hour in seconds
 const HEALTH_MAX_CONCURRENCY = 200;
 
+// Load environment configuration if available
+if (file_exists(__DIR__ . '/.env')) {
+    $envConfig = parse_ini_file(__DIR__ . '/.env');
+    if (is_array($envConfig)) {
+        foreach ($envConfig as $key => $value) {
+            if (!array_key_exists($key, $_ENV)) {
+                $_ENV[$key] = $value;
+            }
+        }
+    }
+}
+
+require_once __DIR__ . '/TelegramNotifier.php';
+
+/**
+ * Resolve Telegram overrides from CLI arguments or HTTP parameters.
+ *
+ * @return array{bot_token:?string,chat_id:?string}
+ */
+function resolveTelegramOverrides(): array {
+    $overrides = [
+        'bot_token' => null,
+        'chat_id' => null,
+    ];
+
+    if (php_sapi_name() === 'cli') {
+        global $argv;
+        if (!empty($argv)) {
+            foreach ($argv as $arg) {
+                if (strpos($arg, '--bot-token=') === 0) {
+                    $overrides['bot_token'] = substr($arg, 12);
+                } elseif (strpos($arg, '--bot=') === 0) {
+                    $overrides['bot_token'] = substr($arg, 6);
+                } elseif (strpos($arg, '--chat-id=') === 0) {
+                    $overrides['chat_id'] = substr($arg, 10);
+                } elseif (strpos($arg, '--chat=') === 0) {
+                    $overrides['chat_id'] = substr($arg, 7);
+                }
+            }
+        }
+    } else {
+        if (isset($_GET['bot_token']) && $_GET['bot_token'] !== '') {
+            $overrides['bot_token'] = (string)$_GET['bot_token'];
+        }
+        if (isset($_GET['chat_id']) && $_GET['chat_id'] !== '') {
+            $overrides['chat_id'] = (string)$_GET['chat_id'];
+        }
+    }
+
+    return $overrides;
+}
+
+$telegramOverrides = resolveTelegramOverrides();
+$telegramNotifier = new TelegramNotifier(
+    $telegramOverrides['bot_token'] ?? '',
+    $telegramOverrides['chat_id'] ?? ''
+);
+
 /**
  * Check if health check is needed
  */
@@ -192,50 +250,145 @@ function checkAndFilterProxies($proxyListFile) {
 }
 
 /**
- * Update proxy list with only working proxies
+ * Update proxy list with only working proxies and optionally notify Telegram.
+ *
+ * @param TelegramNotifier|null $notifier Optional notifier instance.
+ * @param array $options Additional options (title, preview_limit, filename).
+ * @return array Summary of the health check and update.
  */
-function updateProxyList() {
+function updateProxyList(?TelegramNotifier $notifier = null, array $options = []): array {
     global $cacheFile, $proxyListFile;
-    
+
     echo "🔄 Checking proxy health...\n\n";
-    
+
+    $startedAt = time();
     $result = checkAndFilterProxies($proxyListFile);
-    
+
+    $baseSummary = [
+        'success' => false,
+        'updated' => false,
+        'working' => [],
+        'dead' => [],
+        'stats' => [
+            'total' => 0,
+            'working' => 0,
+            'dead' => 0,
+            'success_rate' => 0.0,
+        ],
+        'message' => 'Proxy health check failed.',
+        'checked_at' => $startedAt,
+        'notified' => false,
+        'telegram_enabled' => $notifier ? $notifier->isEnabled() : false,
+    ];
+
+    $title = $options['title'] ?? 'Proxy Health Check';
+
     if ($result === false) {
-        return false;
+        if ($notifier && $notifier->isEnabled()) {
+            $baseSummary['notified'] = $notifier->sendProxyList([], [
+                'title' => $title,
+                'empty_message' => "⚠️ <b>{$title}:</b> Unable to evaluate proxies.",
+            ]);
+        }
+        return $baseSummary;
     }
-    
-    $workingCount = count($result['working']);
-    $deadCount = count($result['dead']);
-    
+
+    $workingProxies = $result['working'];
+    $deadProxies = $result['dead'];
+    $totalCount = $result['total'];
+    $workingCount = count($workingProxies);
+    $deadCount = count($deadProxies);
+    $successRate = $totalCount > 0 ? round(($workingCount / $totalCount) * 100, 1) : 0.0;
+
     echo "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
     echo "📊 Health Check Results:\n";
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-    echo "Total Proxies: {$result['total']}\n";
-    echo "✅ Working: $workingCount\n";
-    echo "❌ Dead: $deadCount\n";
-    echo "Success Rate: " . round(($workingCount / $result['total']) * 100, 1) . "%\n";
+    echo "Total Proxies: {$totalCount}\n";
+    echo "✅ Working: {$workingCount}\n";
+    echo "❌ Dead: {$deadCount}\n";
+    echo "Success Rate: {$successRate}%\n";
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
-    
-    if (empty($result['working'])) {
+
+    $summary = [
+        'success' => $workingCount > 0,
+        'updated' => false,
+        'working' => $workingProxies,
+        'dead' => $deadProxies,
+        'stats' => [
+            'total' => $totalCount,
+            'working' => $workingCount,
+            'dead' => $deadCount,
+            'success_rate' => $successRate,
+        ],
+        'message' => 'No working proxies found; ProxyList.txt not updated.',
+        'checked_at' => $startedAt,
+        'notified' => false,
+        'telegram_enabled' => $notifier ? $notifier->isEnabled() : false,
+    ];
+
+    if ($workingCount === 0) {
         echo "⚠️  WARNING: No working proxies found!\n";
         echo "❌ ProxyList.txt NOT updated (keeping old list)\n";
-        return false;
+
+        if ($notifier && $notifier->isEnabled()) {
+            $summary['notified'] = $notifier->sendProxyList([], [
+                'title' => $title,
+                'stats' => $summary['stats'],
+                'empty_message' => "⚠️ <b>{$title}:</b> No working proxies found.",
+            ]);
+        }
+
+        return $summary;
     }
-    
+
     // Save only working proxies
-    file_put_contents($proxyListFile, implode("\n", $result['working']));
-    
+    file_put_contents($proxyListFile, implode("\n", $workingProxies));
+
     // Update check time
     file_put_contents($cacheFile, time());
-    
+
     if ($deadCount > 0) {
-        echo "🗑️  Removed $deadCount dead proxy(ies)\n";
+        echo "🗑️  Removed {$deadCount} dead proxy(ies)\n";
     }
-    echo "✅ ProxyList.txt updated with $workingCount working proxy(ies)\n";
+    echo "✅ ProxyList.txt updated with {$workingCount} working proxy(ies)\n";
     echo "⏰ Next check in 1 hour\n";
-    
-    return true;
+
+    $summary['updated'] = true;
+    $summary['message'] = "ProxyList.txt updated with {$workingCount} working proxies.";
+
+    if ($notifier && $notifier->isEnabled()) {
+        $summary['notified'] = $notifier->sendProxyList($workingProxies, [
+            'title' => $title,
+            'stats' => $summary['stats'],
+            'preview_limit' => $options['preview_limit'] ?? 10,
+            'filename' => $options['filename'] ?? ('working_proxies_' . date('Ymd_His') . '.txt'),
+        ]);
+    }
+
+    return $summary;
+}
+
+/**
+ * Log Telegram notification status to CLI output.
+ *
+ * @param array $summary Summary returned by updateProxyList.
+ * @param string $label Context label for the log line.
+ */
+function logTelegramSummaryStatus(array $summary, string $label = 'Telegram'): void {
+    if (!isset($summary['telegram_enabled'])) {
+        return;
+    }
+
+    if (!$summary['telegram_enabled']) {
+        echo "ℹ️ {$label}: Telegram notifications disabled (configure TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID or provide overrides).\n";
+        return;
+    }
+
+    if (!empty($summary['notified'])) {
+        echo "📨 {$label}: Telegram notification sent successfully.\n";
+    } else {
+        echo "⚠️ {$label}: Telegram notification could not be delivered.\n";
+    }
 }
 
 /**
@@ -259,10 +412,17 @@ if (php_sapi_name() === 'cli') {
     echo "╔══════════════════════════════════════════════════════════════╗\n";
     echo "║         AUTO PROXY HEALTH CHECK SYSTEM                       ║\n";
     echo "╚══════════════════════════════════════════════════════════════╝\n\n";
+
+    if (!$telegramNotifier->isEnabled()) {
+        echo "ℹ️ Telegram notifications disabled (set TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID or provide --bot/--chat overrides).\n\n";
+    }
     
     if (shouldCheckProxies($cacheFile, $checkInterval)) {
         echo "⏰ Health check needed (>1 hour since last check)\n\n";
-        updateProxyList();
+        $summary = updateProxyList($telegramNotifier, [
+            'title' => 'Background Proxy Health Check',
+        ]);
+        logTelegramSummaryStatus($summary, 'Background');
     } else {
         $timeLeft = getTimeUntilNextCheck($cacheFile, $checkInterval);
         $minutesLeft = floor($timeLeft / 60);
@@ -273,9 +433,22 @@ if (php_sapi_name() === 'cli') {
     }
     
     // Force check option
-    if (isset($argv[1]) && $argv[1] === '--force') {
+    $forceRequested = false;
+    if (!empty($argv)) {
+        foreach ($argv as $arg) {
+            if ($arg === '--force' || $arg === '-f') {
+                $forceRequested = true;
+                break;
+            }
+        }
+    }
+
+    if ($forceRequested) {
         echo "\n🔄 Forcing health check...\n\n";
-        updateProxyList();
+        $forcedSummary = updateProxyList($telegramNotifier, [
+            'title' => 'Forced Proxy Health Check',
+        ]);
+        logTelegramSummaryStatus($forcedSummary, 'Force');
     }
 } else {
     // Web mode - return status
@@ -285,18 +458,28 @@ if (php_sapi_name() === 'cli') {
     $timeUntilCheck = getTimeUntilNextCheck($cacheFile, $checkInterval);
     $needsCheck = shouldCheckProxies($cacheFile, $checkInterval);
     
+    $latestSummary = null;
+    $output = null;
+
     // Auto-check if needed
     if ($needsCheck && isset($_GET['auto'])) {
         ob_start();
-        $success = updateProxyList();
+        $latestSummary = updateProxyList($telegramNotifier, [
+            'title' => 'Background Proxy Health Check',
+        ]);
         $output = ob_get_clean();
         $lastCheck = time();
         $timeUntilCheck = $checkInterval;
         $needsCheck = false;
     }
     
+    $status = $needsCheck ? 'needs_check' : 'healthy';
+    if ($latestSummary !== null) {
+        $status = !empty($latestSummary['success']) ? 'healthy' : 'warning';
+    }
+
     echo json_encode([
-        'status' => $needsCheck ? 'needs_check' : 'healthy',
+        'status' => $status,
         'last_check' => $lastCheck,
         'last_check_formatted' => $lastCheck > 0 ? date('Y-m-d H:i:s', $lastCheck) : 'Never',
         'time_until_check' => $timeUntilCheck,
@@ -305,7 +488,9 @@ if (php_sapi_name() === 'cli') {
         'check_interval_formatted' => '1 hour',
         'proxy_file' => $proxyListFile,
         'proxy_count' => file_exists($proxyListFile) ? count(file($proxyListFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) : 0,
-        'output' => $output ?? null
+        'telegram_enabled' => $telegramNotifier->isEnabled(),
+        'result' => $latestSummary,
+        'output' => $output
     ], JSON_PRETTY_PRINT);
 }
 ?>

@@ -218,6 +218,104 @@ class TelegramNotifier {
     }
     
     /**
+     * Send a proxy list document with summary details.
+     *
+     * @param array $proxies List of proxy strings.
+     * @param array $options Optional settings: title, stats, preview_limit, filename, empty_message, fallback_message.
+     */
+    public function sendProxyList(array $proxies, array $options = []): bool {
+        if (!$this->enabled) {
+            return false;
+        }
+
+        $normalized = [];
+        foreach ($proxies as $proxy) {
+            $proxy = trim((string)$proxy);
+            if ($proxy !== '') {
+                $normalized[] = $proxy;
+            }
+        }
+
+        $stats = $options['stats'] ?? [];
+        $totalChecked = $stats['total'] ?? null;
+        $workingCount = $stats['working'] ?? count($normalized);
+        $deadCount = $stats['dead'] ?? (($totalChecked !== null) ? max(0, $totalChecked - $workingCount) : null);
+        $successRate = $stats['success_rate'] ?? null;
+        $title = $options['title'] ?? 'Proxy Health Check';
+
+        if (empty($normalized)) {
+            $message = $options['empty_message'] ?? "⚠️ <b>{$title}:</b> No working proxies found.";
+            if ($totalChecked !== null) {
+                $message .= "\n• Checked: {$totalChecked}";
+            }
+            if ($deadCount !== null) {
+                $message .= "\n• Dead: {$deadCount}";
+            }
+            $message .= "\n⏰ " . date('Y-m-d H:i:s');
+            return $this->sendMessage($message);
+        }
+
+        $summary = [];
+        $summary[] = "📊 <b>{$title}</b>";
+        if ($totalChecked !== null) {
+            $summary[] = "• Checked: {$totalChecked}";
+        }
+        $summary[] = "• Working: {$workingCount}";
+        if ($deadCount !== null) {
+            $summary[] = "• Dead: {$deadCount}";
+        }
+        if ($successRate !== null) {
+            $summary[] = "• Success Rate: {$successRate}%";
+        }
+        $summary[] = "⏰ " . date('Y-m-d H:i:s');
+
+        $caption = implode("\n", $summary);
+
+        $previewLimit = isset($options['preview_limit']) ? (int)$options['preview_limit'] : 10;
+        if ($previewLimit > 0) {
+            $preview = array_slice($normalized, 0, $previewLimit);
+            if (!empty($preview)) {
+                $caption .= "\n\n<pre>" . htmlspecialchars(implode("\n", $preview), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</pre>";
+                if (count($normalized) > count($preview)) {
+                    $caption .= "\n...";
+                }
+            }
+        }
+
+        $caption = $this->truncateCaption($caption);
+
+        $filename = $options['filename'] ?? ('working_proxies_' . date('Ymd_His') . '.txt');
+        $tmpFile = tempnam(sys_get_temp_dir(), 'proxy_list_');
+
+        if ($tmpFile === false) {
+            return $this->sendMessage($caption);
+        }
+
+        file_put_contents($tmpFile, implode(PHP_EOL, $normalized));
+
+        $document = function_exists('curl_file_create')
+            ? curl_file_create($tmpFile, 'text/plain', $filename)
+            : new CURLFile($tmpFile, 'text/plain', $filename);
+
+        $payload = [
+            'chat_id' => $this->chatId,
+            'document' => $document,
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+        ];
+
+        $success = $this->callAPI('sendDocument', $payload);
+
+        @unlink($tmpFile);
+
+        if (!$success && ($options['fallback_message'] ?? true)) {
+            return $this->sendMessage($caption);
+        }
+
+        return $success;
+    }
+    
+    /**
      * Call Telegram API
      * 
      * @param string $method API method
@@ -287,5 +385,23 @@ class TelegramNotifier {
         if ($this->enabled) {
             $this->apiUrl = 'https://api.telegram.org/bot' . $botToken . '/';
         }
+    }
+
+    /**
+     * Ensure Telegram caption stays within limit.
+     */
+    private function truncateCaption(string $caption, int $limit = 1024): string {
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            if (mb_strlen($caption, 'UTF-8') <= $limit) {
+                return $caption;
+            }
+            return rtrim(mb_substr($caption, 0, $limit - 3, 'UTF-8')) . '...';
+        }
+
+        if (strlen($caption) <= $limit) {
+            return $caption;
+        }
+
+        return rtrim(substr($caption, 0, $limit - 3)) . '...';
     }
 }
