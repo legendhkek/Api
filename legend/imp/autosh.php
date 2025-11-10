@@ -29,6 +29,7 @@ require_once 'CaptchaSolver.php';
 require_once 'AdvancedCaptchaSolver.php';
 require_once 'ProxyAnalytics.php';
 require_once 'TelegramNotifier.php';
+require_once 'WooCommerceCheckout.php';
 
 // Initialize advanced systems
 $analytics = new ProxyAnalytics();
@@ -173,6 +174,60 @@ function transform_rotating_username(string $user): string {
     return $u;
 }
 
+function normalize_target_site(?string $raw): ?array {
+    if ($raw === null) {
+        return null;
+    }
+    $trimmed = trim($raw);
+    if ($trimmed === '') {
+        return null;
+    }
+    if (!preg_match('#^https?://#i', $trimmed)) {
+        $trimmed = 'https://' . ltrim($trimmed, '/');
+    }
+    $sanitized = filter_var($trimmed, FILTER_SANITIZE_URL);
+    if ($sanitized === false) {
+        return null;
+    }
+    $validated = filter_var($sanitized, FILTER_VALIDATE_URL);
+    if ($validated === false) {
+        return null;
+    }
+    $parts = parse_url($validated);
+    if (!is_array($parts) || empty($parts['host'])) {
+        return null;
+    }
+    $scheme = strtolower($parts['scheme'] ?? 'https');
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        $scheme = 'https';
+    }
+    $host = strtolower($parts['host']);
+    $port = isset($parts['port']) ? (int) $parts['port'] : null;
+    $authority = $host;
+    $isDefaultPort = ($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443);
+    if ($port !== null && !$isDefaultPort) {
+        $authority .= ':' . $port;
+    }
+    $pathRaw = $parts['path'] ?? '';
+    $path = $pathRaw === '' ? '/' : (strpos($pathRaw, '/') === 0 ? $pathRaw : '/' . $pathRaw);
+    $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+    $fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+    $full = $scheme . '://' . $authority . $path . $query . $fragment;
+    $base = $scheme . '://' . $authority;
+
+    return [
+        'input' => $raw,
+        'full' => $full,
+        'base' => $base,
+        'scheme' => $scheme,
+        'host' => $host,
+        'port' => $port,
+        'path' => $path,
+        'query' => $query,
+        'fragment' => $fragment,
+    ];
+}
+
 // Extract target site early so proxy testing can validate against it when available
 $__requested_site_param = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
 $__requested_site_for_test = null;
@@ -283,7 +338,7 @@ class GatewayDetector {
     private const SIGNATURES = [
         'stripe' => [
             'name' => 'Stripe',
-            'keywords' => ['stripe', 'pk_live_', 'stripe.js', 'stripepayment', 'stripe-element', 'stripeToken', 'stripe-checkout'],
+            'keywords' => ['stripe', 'pk_live_', 'stripe.js', 'stripepayment', 'stripe-element', 'stripeToken', 'stripe-checkout', 'wc-stripe', 'woocommerce-gateway-stripe', 'stripe-payment-element', 'stripe_payment_element', 'wcpay'],
             'url_keywords' => ['stripe.com', 'stripe.network', 'checkout.stripe.com'],
             'aliases' => ['stripe', 'stripe payments', 'stripe checkout'],
             'card_networks' => ['visa','mastercard','amex','discover','jcb','diners'],
@@ -305,7 +360,7 @@ class GatewayDetector {
         ],
         'razorpay' => [
             'name' => 'Razorpay',
-            'keywords' => ['razorpay', 'rzp_', 'checkout.razorpay', 'razorpay_order_id'],
+            'keywords' => ['razorpay', 'rzp_', 'checkout.razorpay', 'razorpay_order_id', 'wc-razorpay', 'woocommerce-razorpay', 'woo-razorpay'],
             'url_keywords' => ['razorpay.com'],
             'aliases' => ['razorpay'],
             'card_networks' => ['visa','mastercard','amex','rupay'],
@@ -336,9 +391,20 @@ class GatewayDetector {
             'features' => ['shop_pay','apple_pay','google_pay'],
             'funding_types' => ['cards','wallets'],
         ],
+        'woo_payments' => [
+            'name' => 'WooCommerce Payments',
+            'keywords' => ['woo payments', 'woocommerce payments', 'wcpay', 'wp-wcpay', 'wcpay-payment-request'],
+            'url_keywords' => ['woocommerce.com'],
+            'aliases' => ['wcpay', 'woocommerce payments'],
+            'card_networks' => ['visa','mastercard','amex','discover'],
+            'supports_cards' => true,
+            'three_ds' => 'adaptive',
+            'features' => ['apple_pay','google_pay','link'],
+            'funding_types' => ['cards','wallets'],
+        ],
         'payu' => [
             'name' => 'PayU',
-            'keywords' => ['payu', 'payubiz', 'secure.payu', 'boltpay'],
+            'keywords' => ['payu', 'payubiz', 'secure.payu', 'boltpay', 'woocommerce-payu', 'wc-payu', 'woo-payu'],
             'url_keywords' => ['payu.in', 'payu.lat', 'secure.payu'],
             'aliases' => ['payu', 'payubiz'],
             'card_networks' => ['visa','mastercard','amex','diners'],
@@ -393,7 +459,7 @@ class GatewayDetector {
         ],
         'paytm' => [
             'name' => 'Paytm',
-            'keywords' => ['paytm', 'securegw-stage.paytm'],
+            'keywords' => ['paytm', 'securegw-stage.paytm', 'woocommerce-paytm', 'wc-paytm'],
             'url_keywords' => ['paytm.com'],
             'aliases' => ['paytm'],
             'card_networks' => ['visa','mastercard','amex','rupay'],
@@ -404,7 +470,7 @@ class GatewayDetector {
         ],
         'phonepe' => [
             'name' => 'PhonePe',
-            'keywords' => ['phonepe', 'phonepe-checkout'],
+            'keywords' => ['phonepe', 'phonepe-checkout', 'woocommerce-phonepe', 'wc-phonepe'],
             'url_keywords' => ['phonepe.com'],
             'aliases' => ['phonepe'],
             'card_networks' => ['visa','mastercard','rupay'],
@@ -470,7 +536,7 @@ class GatewayDetector {
         ],
         'mercadopago' => [
             'name' => 'Mercado Pago',
-            'keywords' => ['mercadopago', 'mp_checkout', 'mercado_pago'],
+            'keywords' => ['mercadopago', 'mp_checkout', 'mercado_pago', 'woocommerce-mercadopago', 'wc-mercadopago'],
             'url_keywords' => ['mercadopago.com'],
             'aliases' => ['mercadopago'],
             'card_networks' => ['visa','mastercard','amex'],
@@ -701,6 +767,232 @@ class GatewayDetector {
 $GLOBALS['__gateway_primary'] = $GLOBALS['__gateway_primary'] ?? GatewayDetector::unknown();
 $GLOBALS['__gateway_candidates'] = $GLOBALS['__gateway_candidates'] ?? [$GLOBALS['__gateway_primary']];
 $GLOBALS['__payment_context'] = $GLOBALS['__payment_context'] ?? null;
+
+if (!class_exists('PlatformDetector')) {
+class PlatformDetector {
+    private const SIGNATURES = [
+        'shopify' => [
+            'name' => 'Shopify',
+            'keywords' => ['cdn.shopify.com', 'shopifyCheckout', 'window.shopifyAnalytics', 'Shopify.theme', 'shopify_payments', 'x-shopify-stage'],
+            'url_keywords' => ['myshopify.com', 'shopify.com'],
+            'headers' => ['x-shopid', 'x-shopify', 'x-shopify-stage'],
+            'aliases' => ['shopify', 'shopify plus'],
+        ],
+        'woocommerce' => [
+            'name' => 'WooCommerce',
+            'keywords' => ['woocommerce', 'wc-ajax', 'wc_cart_fragments_params', 'wp-content/plugins/woocommerce', 'data-wc-blocks', 'woocommerce_params', 'window.wc'],
+            'url_keywords' => ['/wp-content/', '/wp-json/wc/', '/?wc-ajax='],
+            'headers' => ['x-wc-session', 'x-powered-by:woocommerce'],
+            'aliases' => ['woo', 'woocommerce'],
+        ],
+        'magento' => [
+            'name' => 'Magento',
+            'keywords' => ['mage-cache-storage', 'Magento_Catalog', 'data-mage-init', 'Mage.Cookies'],
+            'url_keywords' => ['/static/frontend/', 'magento2'],
+            'headers' => ['x-magento-cache', 'x-magento-vary'],
+            'aliases' => ['magento'],
+        ],
+        'bigcommerce' => [
+            'name' => 'BigCommerce',
+            'keywords' => ['cdn.bigcommerce.com', 'StencilApp', 'bigcommerce.storefront'],
+            'url_keywords' => ['mybigcommerce.com'],
+            'headers' => ['x-bc', 'x-bc-app'],
+            'aliases' => ['bigcommerce'],
+        ],
+    ];
+
+    public static function unknown(): array
+    {
+        return [
+            'id' => 'unknown',
+            'name' => 'Unknown Platform',
+            'confidence' => 0.0,
+            'signals' => [],
+            'aliases' => [],
+            'notes' => [],
+        ];
+    }
+
+    public static function inspect(string $url, array $options = []): array
+    {
+        $cookie = $options['cookie'] ?? null;
+        $headers = $options['headers'] ?? [];
+        $method = strtoupper($options['method'] ?? 'GET');
+        $body = $options['body'] ?? null;
+
+        $response = http_fetch_document($url, $cookie, $headers, $method, $body);
+        $platform = self::detect($response['effective_url'] ?? $url, $response['body'] ?? '', $response['headers'] ?? []);
+        if (!empty($response['error'])) {
+            $platform['notes'][] = 'curl:' . $response['error'];
+        }
+        if (!empty($response['http_code'])) {
+            $platform['notes'][] = 'http:' . $response['http_code'];
+        }
+
+        return [
+            'platform' => $platform,
+            'document' => $response['body'] ?? '',
+            'headers' => $response['headers'] ?? [],
+            'http_code' => $response['http_code'] ?? null,
+            'effective_url' => $response['effective_url'] ?? $url,
+            'error' => $response['error'] ?? null,
+        ];
+    }
+
+    public static function detect(string $url, string $body, array $headers): array
+    {
+        $bodyLower = strtolower($body);
+        $urlLower = strtolower($url);
+        $normalizedHeaders = self::normalizeHeaders($headers);
+        $results = [];
+
+        foreach (self::SIGNATURES as $id => $signature) {
+            $score = 0;
+            $maxScore = 0;
+            $signals = [];
+
+            foreach ($signature['keywords'] ?? [] as $keyword) {
+                $needle = strtolower($keyword);
+                if ($needle === '') {
+                    continue;
+                }
+                $maxScore += 2;
+                if (strpos($bodyLower, $needle) !== false) {
+                    $score += 2;
+                    $signals[] = 'kw:' . $keyword;
+                }
+            }
+
+            foreach ($signature['url_keywords'] ?? [] as $keyword) {
+                $needle = strtolower($keyword);
+                if ($needle === '') {
+                    continue;
+                }
+                $maxScore += 1;
+                if (strpos($urlLower, $needle) !== false) {
+                    $score += 1;
+                    $signals[] = 'url:' . $keyword;
+                }
+            }
+
+            foreach ($signature['headers'] ?? [] as $keyword) {
+                $needle = strtolower($keyword);
+                $maxScore += 2;
+                if (self::headerContains($normalizedHeaders, $needle)) {
+                    $score += 2;
+                    $signals[] = 'header:' . $keyword;
+                }
+            }
+
+            if ($score <= 0) {
+                continue;
+            }
+
+            $confidence = $maxScore > 0 ? min(1.0, $score / $maxScore) : 0.0;
+            $results[] = [
+                'id' => $id,
+                'name' => $signature['name'],
+                'confidence' => round($confidence, 2),
+                'signals' => array_values(array_unique($signals)),
+                'aliases' => $signature['aliases'] ?? [],
+                'notes' => [],
+            ];
+        }
+
+        if (empty($results)) {
+            return self::unknown();
+        }
+
+        usort($results, static function (array $a, array $b): int {
+            return $b['confidence'] <=> $a['confidence'];
+        });
+
+        return array_merge(self::unknown(), $results[0]);
+    }
+
+    public static function applyOverride(array $detected, string $overrideId): array
+    {
+        $normalized = strtolower(trim($overrideId));
+        if ($normalized === '') {
+            return $detected;
+        }
+        $map = [
+            'shopify' => 'shopify',
+            'shopify_plus' => 'shopify',
+            'woo' => 'woocommerce',
+            'woocommerce' => 'woocommerce',
+            'magento' => 'magento',
+            'bigcommerce' => 'bigcommerce',
+            'custom' => 'custom',
+        ];
+        if (!isset($map[$normalized])) {
+            $detected['notes'][] = 'override-unrecognised:' . $overrideId;
+            return $detected;
+        }
+
+        $target = $map[$normalized];
+        $signals = array_values(array_unique(array_merge($detected['signals'] ?? [], ['override:' . $overrideId])));
+
+        if (isset(self::SIGNATURES[$target])) {
+            $signature = self::SIGNATURES[$target];
+            return [
+                'id' => $target,
+                'name' => $signature['name'],
+                'confidence' => 1.0,
+                'signals' => $signals,
+                'aliases' => $signature['aliases'] ?? [],
+                'notes' => $detected['notes'] ?? [],
+            ];
+        }
+
+        return [
+            'id' => $target,
+            'name' => ucfirst($target),
+            'confidence' => 1.0,
+            'signals' => $signals,
+            'aliases' => [],
+            'notes' => $detected['notes'] ?? [],
+        ];
+    }
+
+    /**
+     * @param array<string, array<int, string>> $headers
+     */
+    private static function normalizeHeaders(array $headers): array
+    {
+        $out = [];
+        foreach ($headers as $name => $value) {
+            $key = strtolower((string) $name);
+            if (is_array($value)) {
+                $out[$key] = array_map(static function ($item) {
+                    return strtolower(trim((string) $item));
+                }, $value);
+            } else {
+                $out[$key] = [strtolower(trim((string) $value))];
+            }
+        }
+        return $out;
+    }
+
+    private static function headerContains(array $headers, string $needle): bool
+    {
+        foreach ($headers as $name => $values) {
+            if (strpos($name, $needle) !== false) {
+                return true;
+            }
+            foreach ($values as $value) {
+                if ($value !== '' && strpos($value, $needle) !== false) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+}
+
+$GLOBALS['__platform_info'] = $GLOBALS['__platform_info'] ?? PlatformDetector::unknown();
+
 
 function find_between($content, $start, $end) {
   $startPos = strpos($content, $start);
@@ -1218,6 +1510,13 @@ function add_proxy_details_to_result(array $result_data, bool $proxy_used, strin
         }
     }
 
+    if (isset($GLOBALS['__platform_info']) && is_array($GLOBALS['__platform_info'])) {
+        $result_data['platform'] = $GLOBALS['__platform_info'];
+        if (!isset($result_data['Platform']) && isset($GLOBALS['__platform_info']['name'])) {
+            $result_data['Platform'] = $GLOBALS['__platform_info']['name'];
+        }
+    }
+
     $durationMs = null;
     if (isset($GLOBALS['start_time'])) {
         $durationMs = round((microtime(true) - $GLOBALS['start_time']) * 1000, 2);
@@ -1514,6 +1813,74 @@ function getMinimumPriceProductDetails(string $json): array {
 }
 
 // Lightweight HTTP GET returning [body, code]
+function http_fetch_document(string $url, ?string $cookieFile = null, array $headers = [], string $method = 'GET', ?string $body = null): array {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    apply_common_timeouts($ch);
+
+    if ($cookieFile) {
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+    }
+
+    $defaultHeaders = [
+        'User-Agent: ' . flow_user_agent(),
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language: en-US,en;q=0.9',
+        'Connection: keep-alive',
+    ];
+    $mergedHeaders = array_merge($defaultHeaders, $headers);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $mergedHeaders);
+
+    $methodUpper = strtoupper($method);
+    if ($methodUpper === 'GET') {
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
+    } elseif ($methodUpper === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body ?? '');
+    } else {
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $methodUpper);
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+    }
+
+    $responseHeaders = [];
+    curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($curl, $headerLine) use (&$responseHeaders) {
+        $trimmed = trim($headerLine);
+        if ($trimmed === '' || strpos($trimmed, ':') === false) {
+            return strlen($headerLine);
+        }
+        [$name, $value] = explode(':', $headerLine, 2);
+        $key = strtolower(trim($name));
+        $value = trim($value);
+        if (!isset($responseHeaders[$key])) {
+            $responseHeaders[$key] = [];
+        }
+        $responseHeaders[$key][] = $value;
+        return strlen($headerLine);
+    });
+
+    apply_proxy_if_used($ch, $url);
+    $responseBody = curl_exec($ch);
+    $curlError = curl_errno($ch) ? curl_error($ch) : null;
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url;
+    curl_close($ch);
+
+    return [
+        'body' => $responseBody !== false ? $responseBody : '',
+        'http_code' => $httpCode ?: null,
+        'effective_url' => $effectiveUrl,
+        'headers' => $responseHeaders,
+        'error' => $curlError,
+    ];
+}
+
 function http_get_with_proxy(string $url, ?string $cookieFile = null, array $headers = []) : array {
     // fresh UA per request
     $dynamicUA = (function(){ static $uaGen=null; if($uaGen===null){$uaGen = new userAgent();} return $uaGen->generate('windows'); })();
@@ -1745,16 +2112,50 @@ function fetch_products_by_handles(string $baseUrl, array $handles, ?string $coo
     return $products;
 }
 
-$site1 = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
-$site1 = parse_url($site1, PHP_URL_HOST);
-$site1 = 'https://' . $site1;
-$site1 = filter_var($site1, FILTER_VALIDATE_URL);
-if ($site1 === false) {
-    $err = 'Invalid URL';
-    $result_data = [
-        'Response' => $err,
-    ];
-    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+$siteParamRaw = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
+if ($siteParamRaw === null || trim($siteParamRaw) === '') {
+    send_final_response(['Response' => 'site parameter is required'], $proxy_used, $proxy_ip, $proxy_port);
+}
+
+$siteInfo = normalize_target_site($siteParamRaw);
+if ($siteInfo === null) {
+    send_final_response(['Response' => 'Invalid site URL provided'], $proxy_used, $proxy_ip, $proxy_port);
+}
+
+$siteFullUrl = $siteInfo['full'];
+$siteBaseUrl = $siteInfo['base'];
+$site1 = $siteBaseUrl;
+$GLOBALS['__target_site'] = $siteInfo;
+
+$platformInspection = PlatformDetector::inspect($siteFullUrl);
+$platformInfo = $platformInspection['platform'] ?? PlatformDetector::unknown();
+if (!isset($platformInfo['notes']) || !is_array($platformInfo['notes'])) {
+    $platformInfo['notes'] = [];
+}
+if (!isset($platformInfo['signals']) || !is_array($platformInfo['signals'])) {
+    $platformInfo['signals'] = [];
+}
+$overridePlatform = isset($_GET['platform']) ? trim((string)$_GET['platform']) : '';
+if ($overridePlatform !== '') {
+    $platformInfo = PlatformDetector::applyOverride($platformInfo, $overridePlatform);
+}
+$platformInfo['detected_url'] = $platformInspection['effective_url'] ?? $siteFullUrl;
+$platformInfo['http_code'] = $platformInspection['http_code'] ?? null;
+
+$GLOBALS['__platform_info'] = $platformInfo;
+$GLOBALS['__platform_preflight'] = $platformInspection;
+
+$platformId = strtolower($platformInfo['id'] ?? 'unknown');
+if ($platformId === 'woocommerce') {
+    WooCommerceCheckout::run($siteInfo, [
+        'preflight' => $platformInspection,
+    ]);
+}
+if ($platformId !== 'shopify' && $platformId !== 'unknown') {
+    send_final_response([
+        'Response' => 'Platform ' . ($platformInfo['name'] ?? $platformInfo['id']) . ' is not yet automated in this flow. Use ?platform=shopify to force Shopify mode or target a supported platform.',
+        'Platform' => $platformInfo['name'] ?? $platformInfo['id'],
+    ], $proxy_used, $proxy_ip, $proxy_port);
 }
 
 // If a proxy was selected (user or auto), verify it can reach the target site with proper HTTPS support

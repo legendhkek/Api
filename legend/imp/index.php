@@ -295,6 +295,43 @@ function h($value): string
             pointer-events: none;
         }
 
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .header-nav a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 16px;
+            border-radius: 12px;
+            background: rgba(99, 102, 241, 0.12);
+            color: #4338ca;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.09);
+            transition: all 0.2s ease;
+        }
+
+        .header-nav a:hover {
+            background: rgba(99, 102, 241, 0.22);
+            box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+        }
+
         h1 {
             color: #3b2f74;
             margin-bottom: 10px;
@@ -313,6 +350,27 @@ function h($value): string
             font-size: 15px;
             line-height: 1.7;
             max-width: 860px;
+        }
+
+        .subtitle.meta {
+            margin-top: 14px;
+            font-size: 13px;
+            opacity: 0.78;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: rgba(79, 70, 229, 0.12);
+            color: #4338ca;
+            font-size: 12px;
+            font-weight: 600;
         }
 
         .status-row {
@@ -504,24 +562,35 @@ if ('serviceWorker' in navigator) {
 </script>
 <div class="container">
     <div class="header">
-        <h1><span>🧠</span> Proxy & Payment Intelligence Hub</h1>
+        <div class="header-top">
+            <h1><span>🧠</span> Proxy & Payment Intelligence Hub</h1>
+            <nav class="header-nav">
+                <a href="#proxy-ops">Proxy Ops</a>
+                <a href="#platform-intel">Platform</a>
+                <a href="#payments">Payments</a>
+                <a href="#woocommerce">WooCommerce</a>
+                <a href="#docs">Docs</a>
+            </nav>
+        </div>
         <p class="subtitle">
-            Autonomous proxy rotation, real-time health insights, and multi-gateway payment reconnaissance &mdash;
-            all orchestrated from a single high-velocity command center. Built for concurrency <strong>200×</strong>,
-            tuned for stealth, and ready for enterprise-grade card flows.
+            Unified proxy intelligence, adaptive platform fingerprinting, and multi-gateway reconnaissance (Shopify, WooCommerce + Stripe/Razorpay/PayU)
+            orchestrated from a single high-velocity command center. Built for <strong>200×</strong> concurrency, tuned for stealth, ready for enterprise-grade card flows.
         </p>
-        <p class="subtitle" style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
-            <strong>Owner:</strong> @LEGEND_BL
+        <p class="subtitle meta">
+            <span class="pill"><strong>Owner:</strong> @LEGEND_BL</span>
+            <span class="pill"><strong>Release:</strong> 2025.11 Gateway+ Platform Edition</span>
+            <span class="pill"><strong>New:</strong> <code>?platform=shopify|woo</code> overrides &amp; WooCommerce deep sweep</span>
         </p>
         <div class="status-row">
             <span class="status">● Local Server Active</span>
             <span class="status orange">⚡ Latency-Optimised</span>
             <span class="status teal">⇄ 200x Parallel Proxy Tests</span>
+            <span class="status" style="background:#7c3aed; box-shadow:0 3px 10px rgba(124,58,237,0.35);">🧭 Multi-platform Ready</span>
             <span class="status blue" id="last-generated">⏱️ Snapshot: <?= h($dashboard['generatedAt']) ?></span>
         </div>
     </div>
 
-    <div class="grid">
+    <div class="grid" id="proxy-ops">
         <div class="card">
             <h2>🌐 Proxy Inventory</h2>
             <p>Live snapshot of `ProxyList.txt` with distribution by protocol and auth coverage.</p>
@@ -626,20 +695,51 @@ if ('serviceWorker' in navigator) {
             </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="payments">
             <h2>💳 Payment Gateway Recon</h2>
-            <p>Autonomous gateway fingerprinting &amp; card orchestration with on-the-fly captcha mitigation.</p>
+            <p>Autonomous gateway fingerprinting &amp; card orchestration with on-the-fly captcha mitigation across Shopify, WooCommerce, Magento and more.</p>
             <a href="test_proxy_system.php" class="btn btn-success" target="_blank">📡 Run Gateway Suite</a>
-            <a href="autosh.php?cc=4111111111111111|12|2027|123&amp;site=https://example.myshopify.com" class="btn btn-warning" target="_blank">⚙️ Execute autosh</a>
+            <a href="autosh.php?site=https://example.myshopify.com&amp;cc=4111111111111111|12|2027|123" class="btn btn-warning" target="_blank">⚙️ Execute autosh</a>
             <div class="code-block">
-curl https://localhost/autosh.php?cc=...<br>
-  &amp;site=https://example.myshopify.com<br>
-  &amp;rotate=1&amp;country=us&amp;format=json
+curl https://localhost/autosh.php?site=https://woo.example/<br>
+  &amp;cc=4111111111111111|12|2028|123<br>
+  &amp;platform=woo&amp;product=176&amp;format=json
             </div>
             <div class="info-box" style="background:#fef3c7;border-left-color:#f59e0b;">
                 <h3>Gateway Coverage Highlights</h3>
                 <p>Stripe, PayPal/Braintree, Adyen, Checkout.com, Worldpay, Authorize.Net, PayU, Razorpay, Square, Klarna, Afterpay/Clearpay, Affirm, Cybersource, MercadoPago, Amazon Pay, PhonePe, Paytm &amp; more.</p>
+                <p><strong>WooCommerce sweep:</strong> surfaces <code>payment_methods</code>, Stripe publishable keys, Razorpay key IDs and PayU merchant keys without browser automation.</p>
                 <p>Instant JSON intelligence: risk hints, card-flow support, 3DS requirement flags, and proxy provenance.</p>
+            </div>
+        </div>
+
+        <div class="card" id="platform-intel">
+            <h2>🧭 Platform Fingerprint</h2>
+            <p>Auto-classify Shopify, WooCommerce, Magento, and BigCommerce before the checkout runbook executes. Responses now expose a <code>platform</code> section with confidence, signals, and detected URLs.</p>
+            <div class="code-block">
+autosh.php?site=https://store.example/&amp;cc=4111111111111111|12|2028|123<br>
+autosh.php?...&amp;platform=shopify&amp;format=json
+            </div>
+            <div class="info-box" style="background:#eef2ff;border-left-color:#6366f1;">
+                <h3>Quick Notes</h3>
+                <p><strong>Auto mode:</strong> Detection runs before captcha or proposal steps &mdash; nothing extra to configure.</p>
+                <p><strong>Override:</strong> Use <code>?platform=woo</code> or <code>?platform=shopify</code> to force a specific strategy.</p>
+                <p><strong>Inspect:</strong> Review <code>platform.signals</code> + <code>platform.notes</code> for confidence hints and raw headers.</p>
+            </div>
+        </div>
+
+        <div class="card" id="woocommerce">
+            <h2>🛍️ WooCommerce Orchestrator</h2>
+            <p>First-class WooCommerce analysis with automatic product discovery, cart priming, and Stripe/Razorpay/PayU token harvesting.</p>
+            <div class="code-block">
+autosh.php?site=https://woo.example/&amp;cc=4111111111111111|12|2028|123<br>
+  &amp;platform=woo&amp;product=beanie-sku&amp;format=json
+            </div>
+            <div class="info-box" style="background:#ecfdf5;border-left-color:#10b981;">
+                <h3>Highlights</h3>
+                <p>✔ Auto product discovery via Store API (fallback to <code>?product=slug</code> or <code>?product=ID</code>).</p>
+                <p>✔ JSON output includes <code>payment.payment_methods</code>, Stripe publishable keys, Razorpay key IDs, and PayU merchant keys.</p>
+                <p>✔ Shares proxy/session jar with Shopify flow so rotation &amp; captcha bypass stay seamless.</p>
             </div>
         </div>
 
@@ -704,12 +804,19 @@ START_SERVER.bat # Windows
         <p><strong>Auto-Fetch:</strong> Automatic proxy fetching when list is empty or stale.</p>
     </div>
 
+    <div class="info-box" style="background:#dbeafe;border-left-color:#3b82f6;">
+        <h3>🧭 Platform &amp; Gateway Updates</h3>
+        <p><strong>Detector:</strong> Responses now include <code>platform.id</code>, <code>confidence</code>, <code>signals</code>, and <code>notes</code> for Shopify, WooCommerce, Magento, and BigCommerce.</p>
+        <p><strong>Overrides:</strong> Use <code>?platform=woo</code> or <code>?platform=shopify</code> to force a runbook &mdash; handy for bespoke storefronts.</p>
+        <p><strong>JSON tips:</strong> Inspect <code>gateway.candidates</code> plus <code>payment.payment_methods</code> for 3DS hints, publishable keys, and funding lanes.</p>
+    </div>
+
     <div class="info-box" style="background:#fff7ed;border-left-color:#fb923c;">
         <h3>🧭 Using autosh.php</h3>
         <p><strong>Direct hit:</strong></p>
         <div class="code-block">
 autosh.php?cc=4111111111111111|12|2028|123<br>
-  &amp;site=https://example.myshopify.com
+  &amp;site=https://example.myshopify.com&amp;platform=shopify
         </div>
         <p><strong>Rotating proxy + country pinning:</strong></p>
         <div class="code-block">
@@ -717,16 +824,17 @@ autosh.php?...&amp;rotate=1&amp;country=us&amp;requireProxy=1
         </div>
         <p><strong>Advanced tuning:</strong></p>
         <div class="code-block">
-autosh.php?...&amp;cto=4&amp;to=20&amp;v4=1&amp;format=json
+autosh.php?...&amp;platform=woo&amp;product=176&amp;cto=4&amp;to=20&amp;v4=1&amp;format=json
         </div>
     </div>
 
-    <div class="card" style="margin-top:24px;">
+    <div class="card" id="docs" style="margin-top:24px;">
         <h2>📁 Toolkit Files</h2>
         <p style="color:#4a5568; font-size:13px;">
             <strong>ProxyManager.php</strong> &ndash; Rotation engine with health tracking<br>
             <strong>fetch_proxies.php</strong> &ndash; High-speed scraping + validation<br>
-            <strong>autosh.php</strong> &ndash; Shopfiy-native multi-gateway executor<br>
+            <strong>autosh.php</strong> &ndash; Shopify/WooCommerce multi-gateway executor<br>
+            <strong>WooCommerceCheckout.php</strong> &ndash; Stripe, Razorpay, PayU automation helpers<br>
             <strong>proxy_cache_refresh.php</strong> &ndash; Scheduled pruning<br>
             <strong>test_proxy_system.php</strong> &ndash; End-to-end diagnostics<br>
             <strong>SETUP_GUIDE.txt</strong> &ndash; Fast start companion
