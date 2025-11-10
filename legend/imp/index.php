@@ -814,6 +814,54 @@ function h($value): string
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: block;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        #alertContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            pointer-events: none;
+        }
+        
+        #alertContainer .alert {
+            pointer-events: auto;
+            margin-bottom: 10px;
+        }
+        
+        input:invalid, select:invalid {
+            border-color: #f44336;
+        }
+        
+        input:valid, select:valid {
+            border-color: #4caf50;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
     </style>
 </head>
 <body>
@@ -1301,125 +1349,417 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
 </div>
 
 <script>
-const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+// Safe JSON parsing with fallback
+let dashboardState = {};
+try {
+    dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
+} catch (e) {
+    console.error('Failed to parse dashboard state:', e);
+    dashboardState = {};
+}
 
-// Tab switching
+// Alert system
+function showAlert(message, type = 'info', duration = 5000) {
+    const alertContainer = document.getElementById('alertContainer') || createAlertContainer();
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} show`;
+    alert.setAttribute('role', 'alert');
+    alert.textContent = message;
+    alert.style.cssText = 'padding: 15px 20px; border-radius: 10px; margin: 15px 0; animation: slideIn 0.3s ease;';
+    
+    if (type === 'error') {
+        alert.style.background = '#ffebee';
+        alert.style.borderLeft = '4px solid #f44336';
+        alert.style.color = '#c62828';
+    } else if (type === 'success') {
+        alert.style.background = '#e8f5e9';
+        alert.style.borderLeft = '4px solid #4caf50';
+        alert.style.color = '#2e7d32';
+    } else if (type === 'warning') {
+        alert.style.background = '#fff3e0';
+        alert.style.borderLeft = '4px solid #ff9800';
+        alert.style.color = '#e65100';
+    }
+    
+    alertContainer.appendChild(alert);
+    
+    setTimeout(() => {
+        alert.style.opacity = '0';
+        alert.style.transition = 'opacity 0.3s';
+        setTimeout(() => alert.remove(), 300);
+    }, duration);
+}
+
+function createAlertContainer() {
+    const container = document.createElement('div');
+    container.id = 'alertContainer';
+    container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; max-width: 400px;';
+    document.body.appendChild(container);
+    return container;
+}
+
+// HTML escape to prevent XSS
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// Tab switching with error handling
 function switchTab(tabName) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
-}
-
-// Gateway search filter
-function filterGateways() {
-    const searchTerm = document.getElementById('gateway-search').value.toLowerCase();
-    const cards = document.querySelectorAll('.gateway-card');
-    
-    cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const category = card.getAttribute('data-category');
-        
-        if (name.includes(searchTerm) || category.includes(searchTerm)) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
+    try {
+        if (!tabName || typeof tabName !== 'string') {
+            console.error('Invalid tab name:', tabName);
+            return;
         }
-    });
+        
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Show selected tab
+        const targetTab = document.getElementById(tabName + '-tab');
+        if (!targetTab) {
+            console.error('Tab not found:', tabName);
+            showAlert('Tab not found: ' + tabName, 'error');
+            return;
+        }
+        
+        targetTab.classList.add('active');
+        
+        // Add active class to clicked button
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
+    } catch (e) {
+        console.error('Error switching tab:', e);
+        showAlert('Error switching tab: ' + e.message, 'error');
+    }
 }
 
-// Refresh dashboard data
-function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
-        .then(resp => resp.json())
-        .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
-
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
-
-            // Update proxy types
-            const typesContainer = document.getElementById('proxy-types');
-            if (typesContainer && data.proxies.byType) {
-                typesContainer.innerHTML = '';
-                Object.keys(data.proxies.byType).sort().forEach(type => {
-                    const div = document.createElement('div');
-                    div.style.margin = '5px 0';
-                    div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${data.proxies.byType[type]}`;
-                    typesContainer.appendChild(div);
-                });
-            }
-
-            // Update proxy sample
-            const sampleContainer = document.getElementById('proxy-sample');
-            if (sampleContainer && data.proxies.sample) {
-                sampleContainer.innerHTML = '';
-                if (data.proxies.sample.length === 0) {
-                    sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
+// Gateway search filter with debouncing
+let searchTimeout = null;
+function filterGateways() {
+    try {
+        const searchInput = document.getElementById('gateway-search');
+        if (!searchInput) return;
+        
+        // Clear previous timeout
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+        
+        // Debounce search
+        searchTimeout = setTimeout(() => {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.gateway-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                if (!card) return;
+                
+                const name = (card.getAttribute('data-name') || '').toLowerCase();
+                const category = (card.getAttribute('data-category') || '').toLowerCase();
+                
+                if (!searchTerm || name.includes(searchTerm) || category.includes(searchTerm)) {
+                    card.style.display = 'block';
+                    visibleCount++;
                 } else {
-                    data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
+                    card.style.display = 'none';
+                }
+            });
+            
+            // Show message if no results
+            const grid = document.getElementById('gateway-grid');
+            if (grid && searchTerm && visibleCount === 0) {
+                const noResults = document.getElementById('no-results-message');
+                if (!noResults) {
+                    const msg = document.createElement('div');
+                    msg.id = 'no-results-message';
+                    msg.style.cssText = 'text-align: center; padding: 40px; color: #999; grid-column: 1 / -1;';
+                    msg.textContent = 'No gateways found matching "' + escapeHtml(searchTerm) + '"';
+                    grid.appendChild(msg);
+                }
+            } else {
+                const noResults = document.getElementById('no-results-message');
+                if (noResults) noResults.remove();
+            }
+        }, 300);
+    } catch (e) {
+        console.error('Error filtering gateways:', e);
+    }
+}
+
+// Refresh dashboard data with improved error handling
+let isRefreshing = false;
+function refreshDashboard() {
+    if (isRefreshing) return;
+    
+    isRefreshing = true;
+    
+    fetch('index.php?stats=1', {
+        cache: 'no-store',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+        .then(resp => {
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+            }
+            return resp.json();
+        })
+        .then(data => {
+            if (!data || typeof data !== 'object') {
+                throw new Error('Invalid response format');
+            }
+            
+            try {
+                // Update metrics with validation
+                const setText = (id, value, fallback = '0') => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value !== null && value !== undefined ? String(value) : fallback;
+                    }
+                };
+
+                if (data.proxies) {
+                    setText('proxy-total', data.proxies.total);
+                    setText('proxy-total-stat', data.proxies.total);
+                    setText('proxy-unique', data.proxies.unique);
+                    setText('proxy-unique-stat', data.proxies.unique);
+                    setText('proxy-auth', data.proxies.withAuth);
+                    setText('proxy-noauth', data.proxies.withoutAuth);
+                    setText('proxy-updated', data.proxies.lastUpdatedHuman || 'Never');
+                }
+                
+                if (data.system) {
+                    setText('health-last', data.system.lastHealthCheckHuman || 'Never');
+                }
+                
+                const lastUpdateEl = document.getElementById('last-update');
+                if (lastUpdateEl) {
+                    lastUpdateEl.textContent = '⏱️ ' + new Date().toLocaleTimeString();
+                }
+
+                // Update proxy types with XSS protection
+                const typesContainer = document.getElementById('proxy-types');
+                if (typesContainer && data.proxies && data.proxies.byType) {
+                    typesContainer.innerHTML = '';
+                    Object.keys(data.proxies.byType).sort().forEach(type => {
+                        const div = document.createElement('div');
+                        div.style.margin = '5px 0';
+                        div.innerHTML = `<strong>${escapeHtml(type.toUpperCase())}:</strong> ${escapeHtml(data.proxies.byType[type])}`;
+                        typesContainer.appendChild(div);
                     });
                 }
-            }
 
-            // Update logs
-            updateLog('proxy-log', data.logs.proxy);
-            updateLog('rotation-log', data.logs.rotation);
+                // Update proxy sample with XSS protection
+                const sampleContainer = document.getElementById('proxy-sample');
+                if (sampleContainer && data.proxies && data.proxies.sample) {
+                    sampleContainer.innerHTML = '';
+                    if (!Array.isArray(data.proxies.sample) || data.proxies.sample.length === 0) {
+                        sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
+                    } else {
+                        data.proxies.sample.forEach(item => {
+                            const line = document.createElement('div');
+                            line.textContent = String(item || '');
+                            sampleContainer.appendChild(line);
+                        });
+                    }
+                }
+
+                // Update logs with XSS protection
+                if (data.logs) {
+                    updateLog('proxy-log', data.logs.proxy);
+                    updateLog('rotation-log', data.logs.rotation);
+                }
+            } catch (e) {
+                console.error('Error updating dashboard:', e);
+            }
         })
-        .catch(() => {
-            console.log('Dashboard refresh failed, will retry...');
+        .catch(error => {
+            console.error('Dashboard refresh failed:', error);
+            // Don't show alert on every failed refresh to avoid spam
+        })
+        .finally(() => {
+            isRefreshing = false;
         });
 }
 
 function updateLog(elementId, lines) {
-    const target = document.getElementById(elementId);
-    if (!target) return;
-    
-    target.innerHTML = '';
-    if (!lines || lines.length === 0) {
-        target.textContent = 'No data available.';
-        return;
+    try {
+        const target = document.getElementById(elementId);
+        if (!target) return;
+        
+        target.innerHTML = '';
+        if (!lines || !Array.isArray(lines) || lines.length === 0) {
+            target.textContent = 'No data available.';
+            return;
+        }
+        
+        lines.forEach(line => {
+            if (line != null) {
+                const div = document.createElement('div');
+                div.textContent = String(line);
+                target.appendChild(div);
+            }
+        });
+        
+        // Auto-scroll to bottom
+        target.scrollTop = target.scrollHeight;
+    } catch (e) {
+        console.error('Error updating log:', e);
     }
-    
-    lines.forEach(line => {
-        target.innerHTML += line + '<br>';
-    });
 }
 
-// Auto-refresh every 15 seconds
-setInterval(refreshDashboard, 15000);
+// Form validation
+function validateForm(form) {
+    if (!form) return false;
+    
+    const requiredFields = form.querySelectorAll('[required]');
+    let isValid = true;
+    const errors = [];
+    
+    requiredFields.forEach(field => {
+        if (!field.value || field.value.trim() === '') {
+            isValid = false;
+            field.style.borderColor = '#f44336';
+            errors.push(field.getAttribute('name') || field.id || 'field');
+            
+            // Reset border color on input
+            field.addEventListener('input', function() {
+                this.style.borderColor = '';
+            }, { once: true });
+        } else {
+            field.style.borderColor = '';
+        }
+    });
+    
+    // URL validation
+    const urlFields = form.querySelectorAll('input[type="url"]');
+    urlFields.forEach(field => {
+        if (field.value) {
+            try {
+                new URL(field.value);
+            } catch (e) {
+                isValid = false;
+                field.style.borderColor = '#f44336';
+                errors.push('Invalid URL in ' + (field.getAttribute('name') || field.id));
+            }
+        }
+    });
+    
+    if (!isValid) {
+        showAlert('Please fill in all required fields correctly. Errors: ' + errors.join(', '), 'error');
+    }
+    
+    return isValid;
+}
 
-// Initial update timestamp
-setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
-}, 1000);
+// Add form validation to all forms
+document.addEventListener('DOMContentLoaded', function() {
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            if (!validateForm(this)) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    });
+    
+    // Add loading states to submit buttons
+    forms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const submitBtn = this.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitBtn) {
+                const originalText = submitBtn.textContent || submitBtn.value;
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.6';
+                submitBtn.style.cursor = 'not-allowed';
+                
+                if (submitBtn.tagName === 'BUTTON') {
+                    submitBtn.textContent = 'Processing...';
+                } else {
+                    submitBtn.value = 'Processing...';
+                }
+            }
+        });
+    });
+});
 
-console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
-console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
-console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+// Auto-refresh every 15 seconds with error handling
+let refreshInterval = null;
+function startAutoRefresh() {
+    if (refreshInterval) clearInterval(refreshInterval);
+    
+    refreshInterval = setInterval(() => {
+        try {
+            refreshDashboard();
+        } catch (e) {
+            console.error('Auto-refresh error:', e);
+        }
+    }, 15000);
+}
+
+// Initial update timestamp with error handling
+let timeInterval = null;
+function startTimeUpdate() {
+    if (timeInterval) clearInterval(timeInterval);
+    
+    timeInterval = setInterval(() => {
+        try {
+            const lastUpdateEl = document.getElementById('last-update');
+            if (lastUpdateEl) {
+                lastUpdateEl.textContent = '⏱️ ' + new Date().toLocaleTimeString();
+            }
+        } catch (e) {
+            console.error('Time update error:', e);
+        }
+    }, 1000);
+}
+
+// Initialize on load
+window.addEventListener('load', function() {
+    try {
+        startAutoRefresh();
+        startTimeUpdate();
+        refreshDashboard(); // Initial load
+        
+        console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
+        console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
+        console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+    } catch (e) {
+        console.error('Initialization error:', e);
+        showAlert('Dashboard initialization error: ' + e.message, 'error');
+    }
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        refreshDashboard();
+    }
+});
+
+// Global error handlers
+window.addEventListener('error', function(event) {
+    console.error('Global error:', event);
+    // Don't show alert for every error to avoid spam
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event);
+    // Don't show alert for every rejection to avoid spam
+});
 </script>
 </body>
 </html>

@@ -27,6 +27,7 @@
             display: flex;
             align-items: center;
             gap: 15px;
+            flex-wrap: wrap;
         }
         .status-indicator {
             width: 12px;
@@ -114,11 +115,35 @@
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s;
+            position: relative;
+            min-width: 150px;
         }
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             background: #5568d3;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            margin: auto;
+            border: 2px solid transparent;
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
         }
         .connection-status {
             display: inline-block;
@@ -129,6 +154,7 @@
         }
         .connected { background: #4caf50; color: white; }
         .disconnected { background: #f44336; color: white; }
+        .connecting { background: #ff9800; color: white; }
         .log-panel {
             background: #1e1e1e;
             color: #0f0;
@@ -143,65 +169,140 @@
         .log-entry {
             padding: 5px 0;
             border-bottom: 1px solid #333;
+            word-wrap: break-word;
         }
         .success { color: #4caf50; }
         .error { color: #f44336; }
         .warning { color: #ff9800; }
         .info { color: #2196f3; }
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .alert.show {
+            display: block;
+        }
+        .alert-error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            color: #c62828;
+        }
+        .alert-success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+        .alert-warning {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            color: #e65100;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 24px;
+            }
+            .btn {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>
-            <span class="status-indicator" id="statusDot"></span>
+            <span class="status-indicator" id="statusDot" aria-label="Connection status indicator"></span>
             Real-Time Proxy Dashboard
-            <span class="connection-status disconnected" id="wsStatus">Connecting...</span>
+            <span class="connection-status disconnected" id="wsStatus" role="status" aria-live="polite">Connecting...</span>
         </h1>
         <p style="text-align: center; color: #666; font-size: 13px; margin-top: -5px; margin-bottom: 15px;">
             Owner: <strong>@LEGEND_BL</strong>
         </p>
         
+        <div id="alertContainer"></div>
+        
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-label">Total Proxies</div>
-                <div class="stat-value" id="totalProxies">0</div>
+                <div class="stat-value" id="totalProxies" aria-live="polite">0</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Active Proxies</div>
-                <div class="stat-value" id="activeProxies">0</div>
+                <div class="stat-value" id="activeProxies" aria-live="polite">0</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Avg Quality</div>
-                <div class="stat-value" id="avgQuality">0%</div>
+                <div class="stat-value" id="avgQuality" aria-live="polite">0%</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Success Rate</div>
-                <div class="stat-value" id="successRate">0%</div>
+                <div class="stat-value" id="successRate" aria-live="polite">0%</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Avg Response</div>
-                <div class="stat-value" id="avgResponse">0s</div>
+                <div class="stat-value" id="avgResponse" aria-live="polite">0s</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Total Requests</div>
-                <div class="stat-value" id="totalRequests">0</div>
+                <div class="stat-value" id="totalRequests" aria-live="polite">0</div>
             </div>
         </div>
         
         <div class="chart-container">
             <h2 style="margin-bottom: 15px; color: #333;">Top Performing Proxies</h2>
-            <div class="proxy-list" id="proxyList">
-                <p style="text-align: center; color: #999;">Loading...</p>
+            <div class="proxy-list" id="proxyList" role="list" aria-label="List of top performing proxies">
+                <div class="empty-state">
+                    <div class="empty-state-icon">⏳</div>
+                    <p>Loading proxy data...</p>
+                </div>
             </div>
         </div>
         
-        <div style="margin: 20px 0;">
-            <button class="btn" onclick="fetchProxies()">🔄 Fetch New Proxies</button>
-            <button class="btn" onclick="runHealthCheck()">🩺 Run Health Check</button>
-            <button class="btn" onclick="clearLogs()">🗑️ Clear Logs</button>
+        <div style="margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn" id="fetchBtn" onclick="fetchProxies()" aria-label="Fetch new proxies from sources">
+                🔄 Fetch New Proxies
+            </button>
+            <button class="btn" id="healthBtn" onclick="runHealthCheck()" aria-label="Run system health check">
+                🩺 Run Health Check
+            </button>
+            <button class="btn" onclick="clearLogs()" aria-label="Clear log panel">
+                🗑️ Clear Logs
+            </button>
         </div>
         
-        <div class="log-panel" id="logPanel">
+        <div class="log-panel" id="logPanel" role="log" aria-label="System log messages" aria-live="polite">
             <div class="log-entry info">[System] Dashboard loaded</div>
         </div>
     </div>
@@ -209,183 +310,469 @@
     <script>
         let ws = null;
         let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        let isFetching = false;
+        let isHealthChecking = false;
         
-        // Connect to WebSocket
+        // Show alert message
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} show`;
+            alert.setAttribute('role', 'alert');
+            alert.textContent = message;
+            container.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => alert.remove(), 300);
+            }, 5000);
+        }
+        
+        // Sanitize HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Connect to WebSocket with improved error handling
         function connectWebSocket() {
+            // Prevent multiple connection attempts
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+                return;
+            }
+            
             const wsUrl = 'ws://localhost:8080';
             log('Connecting to WebSocket server...', 'info');
+            updateConnectionStatus('connecting');
             
             try {
                 ws = new WebSocket(wsUrl);
                 
                 ws.onopen = () => {
-                    log('✓ WebSocket connected', 'success');
-                    updateConnectionStatus(true);
+                    log('✓ WebSocket connected successfully', 'success');
+                    updateConnectionStatus('connected');
+                    reconnectAttempts = 0;
                     
-                    // Request initial data
-                    ws.send(JSON.stringify({ type: 'get_analytics' }));
-                    ws.send(JSON.stringify({ type: 'get_proxies' }));
+                    // Request initial data with error handling
+                    try {
+                        ws.send(JSON.stringify({ type: 'get_analytics' }));
+                        ws.send(JSON.stringify({ type: 'get_proxies' }));
+                    } catch (e) {
+                        log('✗ Error sending initial requests: ' + e.message, 'error');
+                        showAlert('Failed to request initial data', 'error');
+                    }
                 };
                 
                 ws.onmessage = (event) => {
                     try {
+                        if (!event.data) {
+                            log('✗ Received empty message', 'warning');
+                            return;
+                        }
+                        
                         const data = JSON.parse(event.data);
                         handleWebSocketMessage(data);
                     } catch (e) {
-                        console.error('Parse error:', e);
+                        log('✗ Parse error: ' + e.message, 'error');
+                        console.error('WebSocket parse error:', e, 'Data:', event.data);
                     }
                 };
                 
                 ws.onerror = (error) => {
-                    log('✗ WebSocket error', 'error');
-                    console.error(error);
+                    log('✗ WebSocket connection error', 'error');
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus('disconnected');
+                    showAlert('WebSocket connection error. Attempting to reconnect...', 'error');
                 };
                 
-                ws.onclose = () => {
-                    log('WebSocket disconnected', 'warning');
-                    updateConnectionStatus(false);
+                ws.onclose = (event) => {
+                    const wasConnected = reconnectAttempts === 0;
+                    log(`WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`, 'warning');
+                    updateConnectionStatus('disconnected');
                     
-                    // Reconnect after 5 seconds
-                    if (!reconnectTimer) {
-                        reconnectTimer = setTimeout(() => {
-                            reconnectTimer = null;
-                            connectWebSocket();
-                        }, 5000);
+                    // Only attempt reconnect if it wasn't a clean close
+                    if (event.code !== 1000 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                        reconnectAttempts++;
+                        const delay = Math.min(5000 * reconnectAttempts, 30000); // Exponential backoff, max 30s
+                        
+                        if (!reconnectTimer) {
+                            log(`Reconnecting in ${delay/1000}s... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'info');
+                            reconnectTimer = setTimeout(() => {
+                                reconnectTimer = null;
+                                connectWebSocket();
+                            }, delay);
+                        }
+                    } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                        showAlert('Maximum reconnection attempts reached. Please refresh the page.', 'error');
+                        log('✗ Maximum reconnection attempts reached', 'error');
                     }
                 };
             } catch (e) {
-                log('✗ Failed to connect to WebSocket', 'error');
-                updateConnectionStatus(false);
+                log('✗ Failed to create WebSocket: ' + e.message, 'error');
+                updateConnectionStatus('disconnected');
+                showAlert('Failed to connect to WebSocket server: ' + e.message, 'error');
+                console.error('WebSocket creation error:', e);
             }
         }
         
-        // Handle WebSocket messages
+        // Handle WebSocket messages with validation
         function handleWebSocketMessage(data) {
-            if (data.type === 'analytics' || data.type === 'update') {
-                updateAnalytics(data.data || data.analytics);
-            } else if (data.type === 'proxies') {
-                updateProxyList(data.data);
-            } else if (data.type === 'health') {
-                log('Health check: ' + data.data.status, data.data.status === 'healthy' ? 'success' : 'warning');
+            if (!data || typeof data !== 'object') {
+                log('✗ Invalid message format received', 'error');
+                return;
+            }
+            
+            try {
+                if (data.type === 'analytics' || data.type === 'update') {
+                    const analytics = data.data || data.analytics;
+                    if (analytics && typeof analytics === 'object') {
+                        updateAnalytics(analytics);
+                    } else {
+                        log('✗ Invalid analytics data format', 'warning');
+                    }
+                } else if (data.type === 'proxies') {
+                    const proxies = data.data;
+                    if (Array.isArray(proxies)) {
+                        updateProxyList(proxies);
+                    } else {
+                        log('✗ Invalid proxies data format', 'warning');
+                    }
+                } else if (data.type === 'health') {
+                    if (data.data && data.data.status) {
+                        const status = data.data.status;
+                        log('Health check: ' + status, status === 'healthy' ? 'success' : 'warning');
+                    }
+                } else {
+                    log('Unknown message type: ' + (data.type || 'none'), 'info');
+                }
+            } catch (e) {
+                log('✗ Error handling message: ' + e.message, 'error');
+                console.error('Message handling error:', e, 'Data:', data);
             }
         }
         
-        // Update analytics display
+        // Update analytics display with validation
         function updateAnalytics(analytics) {
-            if (!analytics) return;
+            if (!analytics || typeof analytics !== 'object') {
+                log('✗ Cannot update analytics: invalid data', 'error');
+                return;
+            }
             
-            document.getElementById('totalProxies').textContent = analytics.total_proxies || 0;
-            document.getElementById('activeProxies').textContent = analytics.active_proxies || 0;
-            document.getElementById('avgQuality').textContent = Math.round((analytics.avg_quality_score || 0) * 100) + '%';
-            document.getElementById('successRate').textContent = (analytics.success_rate || 0) + '%';
-            document.getElementById('avgResponse').textContent = (analytics.avg_response_time || 0) + 's';
-            document.getElementById('totalRequests').textContent = analytics.total_requests || 0;
-            
-            log('Analytics updated', 'info');
+            try {
+                const safeUpdate = (id, value, fallback = '0') => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value !== null && value !== undefined ? String(value) : fallback;
+                    }
+                };
+                
+                safeUpdate('totalProxies', analytics.total_proxies);
+                safeUpdate('activeProxies', analytics.active_proxies);
+                
+                const avgQuality = analytics.avg_quality_score;
+                const qualityPercent = avgQuality !== null && avgQuality !== undefined 
+                    ? Math.round(Number(avgQuality) * 100) 
+                    : 0;
+                safeUpdate('avgQuality', qualityPercent + '%');
+                
+                const successRate = analytics.success_rate;
+                safeUpdate('successRate', successRate !== null && successRate !== undefined ? Number(successRate).toFixed(1) : 0, '0%');
+                
+                const avgResponse = analytics.avg_response_time;
+                safeUpdate('avgResponse', avgResponse !== null && avgResponse !== undefined ? Number(avgResponse).toFixed(2) : 0, '0s');
+                
+                safeUpdate('totalRequests', analytics.total_requests);
+                
+                log('Analytics updated successfully', 'info');
+            } catch (e) {
+                log('✗ Error updating analytics: ' + e.message, 'error');
+                console.error('Analytics update error:', e);
+            }
         }
         
-        // Update proxy list display
+        // Update proxy list display with XSS protection
         function updateProxyList(proxies) {
-            if (!proxies || !proxies.length) return;
+            if (!Array.isArray(proxies)) {
+                log('✗ Cannot update proxy list: invalid data format', 'error');
+                return;
+            }
             
             const listEl = document.getElementById('proxyList');
-            listEl.innerHTML = '';
+            if (!listEl) {
+                log('✗ Proxy list element not found', 'error');
+                return;
+            }
             
-            proxies.slice(0, 20).forEach(proxy => {
-                const item = document.createElement('div');
-                item.className = 'proxy-item';
-                
-                const quality = Math.round((proxy.quality_score || 0) * 100);
-                const qualityColor = quality > 70 ? '#4caf50' : quality > 40 ? '#ff9800' : '#f44336';
-                
-                item.innerHTML = `
-                    <div>
-                        <strong>${proxy.proxy || 'Unknown'}</strong><br>
-                        <small style="color: #666;">${proxy.country || 'Unknown'} | ${proxy.isp || 'Unknown'}</small>
-                    </div>
-                    <div style="text-align: right;">
-                        <div class="quality-bar">
-                            <div class="quality-fill" style="width: ${quality}%; background: ${qualityColor};"></div>
+            try {
+                if (proxies.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <p>No proxies available</p>
                         </div>
-                        <small style="color: #666;">${quality}% | ${proxy.avg_response_time || 0}s</small>
+                    `;
+                    log('Proxy list is empty', 'warning');
+                    return;
+                }
+                
+                listEl.innerHTML = '';
+                
+                proxies.slice(0, 20).forEach((proxy, index) => {
+                    if (!proxy || typeof proxy !== 'object') {
+                        return;
+                    }
+                    
+                    const item = document.createElement('div');
+                    item.className = 'proxy-item';
+                    item.setAttribute('role', 'listitem');
+                    
+                    const proxyStr = escapeHtml(proxy.proxy || 'Unknown');
+                    const country = escapeHtml(proxy.country || 'Unknown');
+                    const isp = escapeHtml(proxy.isp || 'Unknown');
+                    
+                    const quality = Math.max(0, Math.min(100, Math.round((proxy.quality_score || 0) * 100)));
+                    const qualityColor = quality > 70 ? '#4caf50' : quality > 40 ? '#ff9800' : '#f44336';
+                    const responseTime = proxy.avg_response_time !== null && proxy.avg_response_time !== undefined 
+                        ? Number(proxy.avg_response_time).toFixed(2) 
+                        : '0.00';
+                    
+                    item.innerHTML = `
+                        <div>
+                            <strong>${proxyStr}</strong><br>
+                            <small style="color: #666;">${country} | ${isp}</small>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="quality-bar" role="progressbar" aria-valuenow="${quality}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="quality-fill" style="width: ${quality}%; background: ${qualityColor};"></div>
+                            </div>
+                            <small style="color: #666;">${quality}% | ${responseTime}s</small>
+                        </div>
+                    `;
+                    
+                    listEl.appendChild(item);
+                });
+                
+                log(`Proxy list updated (${proxies.length} proxies, showing top 20)`, 'success');
+            } catch (e) {
+                log('✗ Error updating proxy list: ' + e.message, 'error');
+                console.error('Proxy list update error:', e);
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <p>Error loading proxy list</p>
                     </div>
                 `;
-                
-                listEl.appendChild(item);
-            });
-            
-            log(`Proxy list updated (${proxies.length} proxies)`, 'success');
+            }
         }
         
         // Update connection status
-        function updateConnectionStatus(connected) {
+        function updateConnectionStatus(status) {
             const statusEl = document.getElementById('wsStatus');
             const dotEl = document.getElementById('statusDot');
             
-            if (connected) {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'connection-status connected';
-                dotEl.style.background = '#4caf50';
-            } else {
-                statusEl.textContent = 'Disconnected';
-                statusEl.className = 'connection-status disconnected';
-                dotEl.style.background = '#f44336';
+            if (!statusEl || !dotEl) return;
+            
+            statusEl.classList.remove('connected', 'disconnected', 'connecting');
+            
+            switch(status) {
+                case 'connected':
+                    statusEl.textContent = 'Connected';
+                    statusEl.className = 'connection-status connected';
+                    dotEl.style.background = '#4caf50';
+                    break;
+                case 'connecting':
+                    statusEl.textContent = 'Connecting...';
+                    statusEl.className = 'connection-status connecting';
+                    dotEl.style.background = '#ff9800';
+                    break;
+                case 'disconnected':
+                default:
+                    statusEl.textContent = 'Disconnected';
+                    statusEl.className = 'connection-status disconnected';
+                    dotEl.style.background = '#f44336';
+                    break;
             }
         }
         
-        // Log message
+        // Log message with validation
         function log(message, type = 'info') {
+            if (!message || typeof message !== 'string') {
+                console.warn('Invalid log message:', message);
+                return;
+            }
+            
             const logPanel = document.getElementById('logPanel');
-            const entry = document.createElement('div');
-            entry.className = 'log-entry ' + type;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            logPanel.appendChild(entry);
-            logPanel.scrollTop = logPanel.scrollHeight;
-        }
-        
-        // Fetch new proxies
-        async function fetchProxies() {
-            log('Fetching new proxies...', 'info');
+            if (!logPanel) {
+                console.warn('Log panel not found');
+                return;
+            }
+            
             try {
-                const response = await fetch('/fetch_proxies.php?api=1&count=50');
-                const data = await response.json();
-                if (data.success) {
-                    log(`✓ Fetched ${data.stats.working} working proxies`, 'success');
-                } else {
-                    log('✗ Failed to fetch proxies', 'error');
+                const entry = document.createElement('div');
+                entry.className = 'log-entry ' + (['success', 'error', 'warning', 'info'].includes(type) ? type : 'info');
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logPanel.appendChild(entry);
+                
+                // Limit log entries to prevent memory issues
+                const maxEntries = 500;
+                while (logPanel.children.length > maxEntries) {
+                    logPanel.removeChild(logPanel.firstChild);
                 }
+                
+                logPanel.scrollTop = logPanel.scrollHeight;
             } catch (e) {
-                log('✗ Error fetching proxies', 'error');
+                console.error('Error logging message:', e);
             }
         }
         
-        // Run health check
-        async function runHealthCheck() {
-            log('Running health check...', 'info');
+        // Fetch new proxies with improved error handling
+        async function fetchProxies() {
+            if (isFetching) {
+                showAlert('Proxy fetch already in progress', 'warning');
+                return;
+            }
+            
+            const btn = document.getElementById('fetchBtn');
+            const originalText = btn.textContent;
+            
             try {
-                const response = await fetch('/api.php/health');
+                isFetching = true;
+                btn.disabled = true;
+                btn.classList.add('loading');
+                btn.textContent = 'Fetching...';
+                
+                log('Fetching new proxies...', 'info');
+                
+                const response = await fetch('/fetch_proxies.php?api=1&count=50', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
-                if (data.success) {
-                    const status = data.health.status;
-                    log(`✓ Health check: ${status}`, status === 'healthy' ? 'success' : 'warning');
+                
+                if (data && data.success) {
+                    const working = data.stats?.working || 0;
+                    log(`✓ Successfully fetched ${working} working proxies`, 'success');
+                    showAlert(`Successfully fetched ${working} working proxies`, 'success');
                 } else {
-                    log('✗ Health check failed', 'error');
+                    const errorMsg = data?.error || data?.message || 'Unknown error';
+                    log('✗ Failed to fetch proxies: ' + errorMsg, 'error');
+                    showAlert('Failed to fetch proxies: ' + errorMsg, 'error');
                 }
             } catch (e) {
-                log('✗ Error running health check', 'error');
+                const errorMsg = e.message || 'Network error';
+                log('✗ Error fetching proxies: ' + errorMsg, 'error');
+                showAlert('Error fetching proxies: ' + errorMsg, 'error');
+                console.error('Fetch proxies error:', e);
+            } finally {
+                isFetching = false;
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.textContent = originalText;
+            }
+        }
+        
+        // Run health check with improved error handling
+        async function runHealthCheck() {
+            if (isHealthChecking) {
+                showAlert('Health check already in progress', 'warning');
+                return;
+            }
+            
+            const btn = document.getElementById('healthBtn');
+            const originalText = btn.textContent;
+            
+            try {
+                isHealthChecking = true;
+                btn.disabled = true;
+                btn.classList.add('loading');
+                btn.textContent = 'Checking...';
+                
+                log('Running health check...', 'info');
+                
+                const response = await fetch('/api.php/health', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data && data.success) {
+                    const status = data.health?.status || 'unknown';
+                    const isHealthy = status === 'healthy';
+                    log(`✓ Health check completed: ${status}`, isHealthy ? 'success' : 'warning');
+                    showAlert(`Health check: ${status}`, isHealthy ? 'success' : 'warning');
+                } else {
+                    const errorMsg = data?.error || data?.message || 'Unknown error';
+                    log('✗ Health check failed: ' + errorMsg, 'error');
+                    showAlert('Health check failed: ' + errorMsg, 'error');
+                }
+            } catch (e) {
+                const errorMsg = e.message || 'Network error';
+                log('✗ Error running health check: ' + errorMsg, 'error');
+                showAlert('Error running health check: ' + errorMsg, 'error');
+                console.error('Health check error:', e);
+            } finally {
+                isHealthChecking = false;
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.textContent = originalText;
             }
         }
         
         // Clear logs
         function clearLogs() {
-            document.getElementById('logPanel').innerHTML = '';
-            log('Logs cleared', 'info');
+            const logPanel = document.getElementById('logPanel');
+            if (logPanel) {
+                logPanel.innerHTML = '';
+                log('Logs cleared', 'info');
+            }
         }
         
         // Initialize on load
         window.addEventListener('load', () => {
-            connectWebSocket();
-            log('Dashboard initialized', 'success');
+            try {
+                connectWebSocket();
+                log('Dashboard initialized successfully', 'success');
+            } catch (e) {
+                log('✗ Dashboard initialization error: ' + e.message, 'error');
+                showAlert('Dashboard initialization error: ' + e.message, 'error');
+                console.error('Initialization error:', e);
+            }
+        });
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && (!ws || ws.readyState === WebSocket.CLOSED)) {
+                log('Page visible, reconnecting...', 'info');
+                connectWebSocket();
+            }
+        });
+        
+        // Handle errors globally
+        window.addEventListener('error', (event) => {
+            log('✗ Unhandled error: ' + (event.message || 'Unknown'), 'error');
+            console.error('Global error:', event);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            log('✗ Unhandled promise rejection: ' + (event.reason?.message || event.reason || 'Unknown'), 'error');
+            console.error('Unhandled rejection:', event);
         });
     </script>
 </body>
