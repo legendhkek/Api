@@ -814,6 +814,167 @@ function h($value): string
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Error and Success Messages */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border-left: 4px solid var(--success);
+            color: #065f46;
+        }
+
+        .alert-error {
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+            border-left: 4px solid var(--danger);
+            color: #991b1b;
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #fffbeb, #fef3c7);
+            border-left: 4px solid var(--warning);
+            color: #92400e;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border-left: 4px solid var(--info);
+            color: #1e40af;
+        }
+
+        .alert-close {
+            margin-left: auto;
+            cursor: pointer;
+            padding: 5px 10px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .alert-close:hover {
+            opacity: 1;
+        }
+
+        /* Improved form validation */
+        .form-error {
+            color: var(--danger);
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .form-error.show {
+            display: block;
+            animation: shake 0.3s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        form input.error, form select.error {
+            border-color: var(--danger);
+            background: #fef2f2;
+        }
+
+        form input.success, form select.success {
+            border-color: var(--success);
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            background-color: #1e293b;
+            color: white;
+            text-align: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Accessibility improvements */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Focus styles for accessibility */
+        *:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body>
@@ -1300,26 +1461,147 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
     </div>
 </div>
 
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+</div>
+
+<div id="alertContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; max-width: 400px;"></div>
+
 <script>
 const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-// Tab switching
+// Utility: Show alert message
+function showAlert(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('alertContainer');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    
+    const icons = {
+        success: '✓',
+        error: '✗',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    alert.innerHTML = `
+        <span style="font-size: 18px;">${icons[type] || icons.info}</span>
+        <span>${message}</span>
+        <span class="alert-close" onclick="this.parentElement.remove()">✕</span>
+    `;
+    
+    container.appendChild(alert);
+    
+    if (duration > 0) {
+        setTimeout(() => {
+            alert.style.opacity = '0';
+            alert.style.transform = 'translateX(100%)';
+            setTimeout(() => alert.remove(), 300);
+        }, duration);
+    }
+}
+
+// Utility: Show/hide loading overlay
+function showLoading(show = true) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (show) {
+        overlay.classList.add('show');
+    } else {
+        overlay.classList.remove('show');
+    }
+}
+
+// Utility: Validate URL
+function isValidUrl(string) {
+    try {
+        const url = new URL(string);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_) {
+        return false;
+    }
+}
+
+// Utility: Validate card format
+function isValidCardFormat(card) {
+    const pattern = /^\d{13,19}\|\d{1,2}\|\d{4}\|\d{3,4}$/;
+    return pattern.test(card);
+}
+
+// Utility: Validate proxy format
+function isValidProxyFormat(proxy) {
+    const pattern = /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
+    return pattern.test(proxy);
+}
+
+// Form validation helper
+function validateFormField(input, validationFn, errorMessage) {
+    const value = input.value.trim();
+    const errorEl = input.nextElementSibling;
+    
+    if (!value) {
+        input.classList.remove('success', 'error');
+        if (errorEl && errorEl.classList.contains('form-error')) {
+            errorEl.classList.remove('show');
+        }
+        return true; // Allow empty if not required
+    }
+    
+    const isValid = validationFn(value);
+    
+    if (isValid) {
+        input.classList.remove('error');
+        input.classList.add('success');
+        if (errorEl && errorEl.classList.contains('form-error')) {
+            errorEl.classList.remove('show');
+        }
+    } else {
+        input.classList.remove('success');
+        input.classList.add('error');
+        if (errorEl && errorEl.classList.contains('form-error')) {
+            errorEl.textContent = errorMessage;
+            errorEl.classList.add('show');
+        }
+    }
+    
+    return isValid;
+}
+
+// Tab switching with error handling
 function switchTab(tabName) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
+    try {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Show selected tab
+        const targetTab = document.getElementById(tabName + '-tab');
+        if (targetTab) {
+            targetTab.classList.add('active');
+        } else {
+            showAlert('Tab not found: ' + tabName, 'error');
+            return;
+        }
+        
+        // Add active class to clicked button
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
+        
+        // Save preference
+        try {
+            localStorage.setItem('lastActiveTab', tabName);
+        } catch (e) {
+            // Ignore localStorage errors
+        }
+    } catch (error) {
+        console.error('Tab switch error:', error);
+        showAlert('Failed to switch tab', 'error');
+    }
 }
 
 // Gateway search filter
@@ -1339,59 +1621,134 @@ function filterGateways() {
     });
 }
 
-// Refresh dashboard data
+// Refresh dashboard data with better error handling
 function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
-        .then(resp => resp.json())
-        .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
-
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
-
-            // Update proxy types
-            const typesContainer = document.getElementById('proxy-types');
-            if (typesContainer && data.proxies.byType) {
-                typesContainer.innerHTML = '';
-                Object.keys(data.proxies.byType).sort().forEach(type => {
-                    const div = document.createElement('div');
-                    div.style.margin = '5px 0';
-                    div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${data.proxies.byType[type]}`;
-                    typesContainer.appendChild(div);
-                });
+    fetch('index.php?stats=1', {
+        cache: 'no-store',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(resp => {
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        return resp.json();
+    })
+    .then(data => {
+        if (!data) {
+            throw new Error('Empty response received');
+        }
+        
+        // Update metrics safely
+        const setText = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value !== null && value !== undefined ? value : '0';
             }
+        };
 
-            // Update proxy sample
-            const sampleContainer = document.getElementById('proxy-sample');
-            if (sampleContainer && data.proxies.sample) {
+        // Update all metrics with null safety
+        setText('proxy-total', data.proxies?.total ?? 0);
+        setText('proxy-total-stat', data.proxies?.total ?? 0);
+        setText('proxy-unique', data.proxies?.unique ?? 0);
+        setText('proxy-unique-stat', data.proxies?.unique ?? 0);
+        setText('proxy-auth', data.proxies?.withAuth ?? 0);
+        setText('proxy-noauth', data.proxies?.withoutAuth ?? 0);
+        setText('proxy-updated', data.proxies?.lastUpdatedHuman ?? 'Never');
+        setText('health-last', data.system?.lastHealthCheckHuman ?? 'Never');
+        setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+
+        // Update proxy types with error handling
+        const typesContainer = document.getElementById('proxy-types');
+        if (typesContainer && data.proxies?.byType) {
+            try {
+                typesContainer.innerHTML = '';
+                const types = Object.keys(data.proxies.byType).sort();
+                if (types.length === 0) {
+                    typesContainer.innerHTML = '<div>No proxy types loaded.</div>';
+                } else {
+                    types.forEach(type => {
+                        const div = document.createElement('div');
+                        div.style.margin = '5px 0';
+                        div.innerHTML = `<strong>${escapeHtml(type.toUpperCase())}:</strong> ${data.proxies.byType[type]}`;
+                        typesContainer.appendChild(div);
+                    });
+                }
+            } catch (e) {
+                console.error('Error updating proxy types:', e);
+            }
+        }
+
+        // Update proxy sample with error handling
+        const sampleContainer = document.getElementById('proxy-sample');
+        if (sampleContainer && data.proxies?.sample) {
+            try {
                 sampleContainer.innerHTML = '';
-                if (data.proxies.sample.length === 0) {
+                if (!data.proxies.sample.length) {
                     sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
                 } else {
                     data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
+                        const line = document.createTextNode(item);
+                        sampleContainer.appendChild(line);
+                        sampleContainer.appendChild(document.createElement('br'));
                     });
                 }
+            } catch (e) {
+                console.error('Error updating proxy sample:', e);
             }
+        }
 
-            // Update logs
-            updateLog('proxy-log', data.logs.proxy);
-            updateLog('rotation-log', data.logs.rotation);
-        })
-        .catch(() => {
-            console.log('Dashboard refresh failed, will retry...');
-        });
+        // Update logs
+        updateLog('proxy-log', data.logs?.proxy || []);
+        updateLog('rotation-log', data.logs?.rotation || []);
+        
+        // Update success indicator
+        updateConnectionIndicator(true);
+    })
+    .catch((error) => {
+        console.error('Dashboard refresh failed:', error);
+        updateConnectionIndicator(false);
+        
+        // Only show error on first failure or critical errors
+        if (window.dashboardRefreshErrors === undefined) {
+            window.dashboardRefreshErrors = 0;
+        }
+        window.dashboardRefreshErrors++;
+        
+        if (window.dashboardRefreshErrors === 1) {
+            showAlert('Connection issue detected. Retrying...', 'warning', 3000);
+        } else if (window.dashboardRefreshErrors > 5) {
+            showAlert('Unable to connect to server. Please check your connection.', 'error', 0);
+        }
+    });
+}
+
+// Helper: Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Update connection indicator
+function updateConnectionIndicator(connected) {
+    const indicator = document.getElementById('last-update');
+    if (indicator) {
+        if (!connected) {
+            indicator.style.background = 'var(--danger)';
+            indicator.title = 'Connection lost';
+        } else {
+            indicator.style.background = 'var(--success)';
+            indicator.title = 'Connected';
+            window.dashboardRefreshErrors = 0; // Reset error counter
+        }
+    }
 }
 
 function updateLog(elementId, lines) {
@@ -1409,17 +1766,208 @@ function updateLog(elementId, lines) {
     });
 }
 
+// Initialize form validation on all forms
+function initializeFormValidation() {
+    // Add validation to URL inputs
+    document.querySelectorAll('input[type="url"]').forEach(input => {
+        if (!input.dataset.validationInitialized) {
+            input.dataset.validationInitialized = 'true';
+            
+            // Add error message element if not present
+            if (!input.nextElementSibling || !input.nextElementSibling.classList.contains('form-error')) {
+                const errorEl = document.createElement('div');
+                errorEl.className = 'form-error';
+                input.parentNode.insertBefore(errorEl, input.nextSibling);
+            }
+            
+            input.addEventListener('blur', function() {
+                if (this.hasAttribute('required') || this.value.trim()) {
+                    validateFormField(this, isValidUrl, 'Please enter a valid URL (http:// or https://)');
+                }
+            });
+            
+            input.addEventListener('input', function() {
+                if (this.classList.contains('error')) {
+                    validateFormField(this, isValidUrl, 'Please enter a valid URL (http:// or https://)');
+                }
+            });
+        }
+    });
+    
+    // Add validation to card inputs
+    document.querySelectorAll('input[name="cc"]').forEach(input => {
+        if (!input.dataset.validationInitialized) {
+            input.dataset.validationInitialized = 'true';
+            
+            if (!input.nextElementSibling || !input.nextElementSibling.classList.contains('form-error')) {
+                const errorEl = document.createElement('div');
+                errorEl.className = 'form-error';
+                input.parentNode.insertBefore(errorEl, input.nextSibling);
+            }
+            
+            input.addEventListener('blur', function() {
+                if (this.hasAttribute('required') || this.value.trim()) {
+                    validateFormField(this, isValidCardFormat, 'Format: 4111111111111111|12|2027|123');
+                }
+            });
+            
+            input.addEventListener('input', function() {
+                if (this.classList.contains('error')) {
+                    validateFormField(this, isValidCardFormat, 'Format: 4111111111111111|12|2027|123');
+                }
+            });
+        }
+    });
+    
+    // Add validation to proxy inputs
+    document.querySelectorAll('input[name="proxy"]').forEach(input => {
+        if (!input.dataset.validationInitialized) {
+            input.dataset.validationInitialized = 'true';
+            
+            if (!input.nextElementSibling || !input.nextElementSibling.classList.contains('form-error')) {
+                const errorEl = document.createElement('div');
+                errorEl.className = 'form-error';
+                input.parentNode.insertBefore(errorEl, input.nextSibling);
+            }
+            
+            input.addEventListener('blur', function() {
+                if (this.value.trim()) {
+                    validateFormField(this, isValidProxyFormat, 'Format: 123.456.789.012:8080');
+                }
+            });
+        }
+    });
+    
+    // Form submission validation
+    document.querySelectorAll('form').forEach(form => {
+        if (!form.dataset.validationInitialized) {
+            form.dataset.validationInitialized = 'true';
+            
+            form.addEventListener('submit', function(e) {
+                let isValid = true;
+                
+                // Validate URL inputs
+                this.querySelectorAll('input[type="url"][required]').forEach(input => {
+                    if (!validateFormField(input, isValidUrl, 'Please enter a valid URL')) {
+                        isValid = false;
+                    }
+                });
+                
+                // Validate card inputs
+                this.querySelectorAll('input[name="cc"][required]').forEach(input => {
+                    if (!validateFormField(input, isValidCardFormat, 'Invalid card format')) {
+                        isValid = false;
+                    }
+                });
+                
+                if (!isValid) {
+                    e.preventDefault();
+                    showAlert('Please fix the errors in the form', 'error');
+                    
+                    // Scroll to first error
+                    const firstError = this.querySelector('.error');
+                    if (firstError) {
+                        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        firstError.focus();
+                    }
+                }
+            });
+        }
+    });
+}
+
+// Restore last active tab
+function restoreLastTab() {
+    try {
+        const lastTab = localStorage.getItem('lastActiveTab');
+        if (lastTab && document.getElementById(lastTab + '-tab')) {
+            switchTab(lastTab);
+            // Find and activate the corresponding tab button
+            document.querySelectorAll('.tab').forEach(btn => {
+                if (btn.onclick && btn.onclick.toString().includes(lastTab)) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+    } catch (e) {
+        // Ignore localStorage errors
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
+    console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
+    console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+    
+    // Initialize form validation
+    initializeFormValidation();
+    
+    // Restore last tab
+    restoreLastTab();
+    
+    // Show welcome message
+    setTimeout(() => {
+        showAlert('Dashboard loaded successfully. Auto-refresh enabled.', 'success', 3000);
+    }, 500);
+});
+
 // Auto-refresh every 15 seconds
 setInterval(refreshDashboard, 15000);
 
-// Initial update timestamp
+// Update timestamp every second
 setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
+    const el = document.getElementById('last-update');
+    if (el) {
+        el.textContent = '⏱️ ' + new Date().toLocaleTimeString();
+    }
 }, 1000);
 
-console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
-console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
-console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + K to focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.getElementById('gateway-search');
+        if (searchInput && searchInput.offsetParent !== null) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+    
+    // Ctrl/Cmd + R to refresh (prevent default browser refresh)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        refreshDashboard();
+        showAlert('Dashboard refreshed', 'info', 2000);
+    }
+    
+    // ESC to close alerts
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.alert').forEach(alert => alert.remove());
+    }
+});
+
+// Handle visibility change to pause/resume updates
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        console.log('Dashboard hidden, auto-refresh paused');
+    } else {
+        console.log('Dashboard visible, auto-refresh resumed');
+        refreshDashboard(); // Immediate refresh when tab becomes visible
+    }
+});
+
+// Error boundary - catch unhandled errors
+window.addEventListener('error', function(e) {
+    console.error('Unhandled error:', e.error);
+    // Don't show alert for every error, just log it
+});
+
+// Unhandled promise rejections
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled promise rejection:', e.reason);
+});
 </script>
 </body>
 </html>

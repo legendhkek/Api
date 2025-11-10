@@ -209,22 +209,54 @@
     <script>
         let ws = null;
         let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 10;
+        let useHttpFallback = false;
+        let httpPollTimer = null;
         
-        // Connect to WebSocket
+        // Connect to WebSocket with better error handling
         function connectWebSocket() {
+            // If WebSocket failed too many times, use HTTP polling
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                log('WebSocket unavailable, switching to HTTP polling...', 'warning');
+                useHttpFallback = true;
+                startHttpPolling();
+                return;
+            }
+            
             const wsUrl = 'ws://localhost:8080';
-            log('Connecting to WebSocket server...', 'info');
+            log(`Connecting to WebSocket server... (attempt ${reconnectAttempts + 1})`, 'info');
             
             try {
+                // Close existing connection if any
+                if (ws && ws.readyState !== WebSocket.CLOSED) {
+                    ws.close();
+                }
+                
                 ws = new WebSocket(wsUrl);
                 
+                // Set connection timeout
+                const connectionTimeout = setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        ws.close();
+                        log('✗ WebSocket connection timeout', 'error');
+                        scheduleReconnect();
+                    }
+                }, 5000);
+                
                 ws.onopen = () => {
+                    clearTimeout(connectionTimeout);
+                    reconnectAttempts = 0; // Reset on successful connection
                     log('✓ WebSocket connected', 'success');
                     updateConnectionStatus(true);
                     
                     // Request initial data
-                    ws.send(JSON.stringify({ type: 'get_analytics' }));
-                    ws.send(JSON.stringify({ type: 'get_proxies' }));
+                    try {
+                        ws.send(JSON.stringify({ type: 'get_analytics' }));
+                        ws.send(JSON.stringify({ type: 'get_proxies' }));
+                    } catch (e) {
+                        log('✗ Failed to send initial requests', 'error');
+                    }
                 };
                 
                 ws.onmessage = (event) => {
@@ -232,31 +264,80 @@
                         const data = JSON.parse(event.data);
                         handleWebSocketMessage(data);
                     } catch (e) {
+                        log('✗ Failed to parse message: ' + e.message, 'error');
                         console.error('Parse error:', e);
                     }
                 };
                 
                 ws.onerror = (error) => {
+                    clearTimeout(connectionTimeout);
                     log('✗ WebSocket error', 'error');
-                    console.error(error);
+                    console.error('WebSocket error:', error);
                 };
                 
-                ws.onclose = () => {
-                    log('WebSocket disconnected', 'warning');
+                ws.onclose = (event) => {
+                    clearTimeout(connectionTimeout);
+                    log(`WebSocket disconnected (code: ${event.code})`, 'warning');
                     updateConnectionStatus(false);
-                    
-                    // Reconnect after 5 seconds
-                    if (!reconnectTimer) {
-                        reconnectTimer = setTimeout(() => {
-                            reconnectTimer = null;
-                            connectWebSocket();
-                        }, 5000);
-                    }
+                    scheduleReconnect();
                 };
             } catch (e) {
-                log('✗ Failed to connect to WebSocket', 'error');
+                log('✗ Failed to create WebSocket: ' + e.message, 'error');
+                console.error('WebSocket creation error:', e);
                 updateConnectionStatus(false);
+                scheduleReconnect();
             }
+        }
+        
+        // Schedule reconnection with exponential backoff
+        function scheduleReconnect() {
+            if (reconnectTimer) return;
+            
+            reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000); // Max 30s
+            
+            log(`Reconnecting in ${Math.round(delay / 1000)}s...`, 'info');
+            
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                if (!useHttpFallback) {
+                    connectWebSocket();
+                }
+            }, delay);
+        }
+        
+        // HTTP polling fallback
+        function startHttpPolling() {
+            if (httpPollTimer) return;
+            
+            log('HTTP polling mode activated', 'info');
+            updateConnectionStatus(false);
+            
+            // Initial poll
+            pollDashboardData();
+            
+            // Poll every 10 seconds
+            httpPollTimer = setInterval(pollDashboardData, 10000);
+        }
+        
+        // Poll dashboard data via HTTP
+        function pollDashboardData() {
+            Promise.all([
+                fetch('/index.php?stats=1').then(r => r.ok ? r.json() : null),
+                fetch('/api.php/analytics').then(r => r.ok ? r.json() : null)
+            ])
+            .then(([dashboardData, analyticsData]) => {
+                if (analyticsData && analyticsData.success) {
+                    handleWebSocketMessage({ type: 'analytics', data: analyticsData.analytics });
+                }
+                if (analyticsData && analyticsData.success && analyticsData.proxies) {
+                    handleWebSocketMessage({ type: 'proxies', data: analyticsData.proxies });
+                }
+            })
+            .catch(error => {
+                log('✗ HTTP polling failed: ' + error.message, 'error');
+                console.error('Polling error:', error);
+            });
         }
         
         // Handle WebSocket messages
@@ -270,51 +351,113 @@
             }
         }
         
-        // Update analytics display
+        // Update analytics display with better error handling
         function updateAnalytics(analytics) {
-            if (!analytics) return;
+            if (!analytics) {
+                log('No analytics data received', 'warning');
+                return;
+            }
             
-            document.getElementById('totalProxies').textContent = analytics.total_proxies || 0;
-            document.getElementById('activeProxies').textContent = analytics.active_proxies || 0;
-            document.getElementById('avgQuality').textContent = Math.round((analytics.avg_quality_score || 0) * 100) + '%';
-            document.getElementById('successRate').textContent = (analytics.success_rate || 0) + '%';
-            document.getElementById('avgResponse').textContent = (analytics.avg_response_time || 0) + 's';
-            document.getElementById('totalRequests').textContent = analytics.total_requests || 0;
-            
-            log('Analytics updated', 'info');
+            try {
+                const safeSet = (id, value, suffix = '') => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = (value !== null && value !== undefined ? value : 0) + suffix;
+                    }
+                };
+                
+                safeSet('totalProxies', analytics.total_proxies || 0);
+                safeSet('activeProxies', analytics.active_proxies || 0);
+                safeSet('avgQuality', Math.round((analytics.avg_quality_score || 0) * 100), '%');
+                safeSet('successRate', analytics.success_rate || 0, '%');
+                safeSet('avgResponse', (analytics.avg_response_time || 0).toFixed(2), 's');
+                safeSet('totalRequests', analytics.total_requests || 0);
+                
+                log('Analytics updated successfully', 'info');
+            } catch (e) {
+                log('✗ Failed to update analytics: ' + e.message, 'error');
+                console.error('Analytics update error:', e);
+            }
         }
         
-        // Update proxy list display
+        // Update proxy list display with better error handling
         function updateProxyList(proxies) {
-            if (!proxies || !proxies.length) return;
+            if (!proxies) {
+                log('No proxy data received', 'warning');
+                return;
+            }
+            
+            if (!Array.isArray(proxies)) {
+                log('✗ Invalid proxy data format', 'error');
+                return;
+            }
             
             const listEl = document.getElementById('proxyList');
-            listEl.innerHTML = '';
+            if (!listEl) {
+                log('✗ Proxy list element not found', 'error');
+                return;
+            }
             
-            proxies.slice(0, 20).forEach(proxy => {
-                const item = document.createElement('div');
-                item.className = 'proxy-item';
+            try {
+                if (proxies.length === 0) {
+                    listEl.innerHTML = '<p style="text-align: center; color: #999;">No proxies available</p>';
+                    log('No proxies to display', 'info');
+                    return;
+                }
                 
-                const quality = Math.round((proxy.quality_score || 0) * 100);
-                const qualityColor = quality > 70 ? '#4caf50' : quality > 40 ? '#ff9800' : '#f44336';
+                listEl.innerHTML = '';
                 
-                item.innerHTML = `
-                    <div>
-                        <strong>${proxy.proxy || 'Unknown'}</strong><br>
-                        <small style="color: #666;">${proxy.country || 'Unknown'} | ${proxy.isp || 'Unknown'}</small>
-                    </div>
-                    <div style="text-align: right;">
-                        <div class="quality-bar">
-                            <div class="quality-fill" style="width: ${quality}%; background: ${qualityColor};"></div>
-                        </div>
-                        <small style="color: #666;">${quality}% | ${proxy.avg_response_time || 0}s</small>
-                    </div>
-                `;
+                proxies.slice(0, 20).forEach((proxy, index) => {
+                    try {
+                        const item = document.createElement('div');
+                        item.className = 'proxy-item';
+                        
+                        const quality = Math.round((proxy.quality_score || 0) * 100);
+                        const qualityColor = quality > 70 ? '#4caf50' : quality > 40 ? '#ff9800' : '#f44336';
+                        
+                        // Sanitize data
+                        const proxyAddr = escapeHtml(proxy.proxy || 'Unknown');
+                        const country = escapeHtml(proxy.country || 'Unknown');
+                        const isp = escapeHtml(proxy.isp || 'Unknown');
+                        const responseTime = (proxy.avg_response_time || 0).toFixed(2);
+                        
+                        item.innerHTML = `
+                            <div>
+                                <strong>${proxyAddr}</strong><br>
+                                <small style="color: #666;">${country} | ${isp}</small>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="quality-bar">
+                                    <div class="quality-fill" style="width: ${quality}%; background: ${qualityColor};"></div>
+                                </div>
+                                <small style="color: #666;">${quality}% | ${responseTime}s</small>
+                            </div>
+                        `;
+                        
+                        listEl.appendChild(item);
+                    } catch (e) {
+                        console.error(`Error rendering proxy ${index}:`, e);
+                    }
+                });
                 
-                listEl.appendChild(item);
-            });
-            
-            log(`Proxy list updated (${proxies.length} proxies)`, 'success');
+                log(`Proxy list updated (${proxies.length} proxies)`, 'success');
+            } catch (e) {
+                log('✗ Failed to update proxy list: ' + e.message, 'error');
+                console.error('Proxy list update error:', e);
+                listEl.innerHTML = '<p style="text-align: center; color: #f44336;">Error loading proxies</p>';
+            }
+        }
+        
+        // Helper: Escape HTML
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
         }
         
         // Update connection status
@@ -343,36 +486,84 @@
             logPanel.scrollTop = logPanel.scrollHeight;
         }
         
-        // Fetch new proxies
+        // Fetch new proxies with better error handling
         async function fetchProxies() {
             log('Fetching new proxies...', 'info');
+            
             try {
-                const response = await fetch('/fetch_proxies.php?api=1&count=50');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+                
+                const response = await fetch('/fetch_proxies.php?api=1&count=50', {
+                    signal: controller.signal,
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
-                if (data.success) {
-                    log(`✓ Fetched ${data.stats.working} working proxies`, 'success');
+                
+                if (data && data.success) {
+                    const working = data.stats?.working || 0;
+                    log(`✓ Fetched ${working} working proxies`, 'success');
+                    
+                    // Refresh display after fetching
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'get_proxies' }));
+                    } else if (useHttpFallback) {
+                        pollDashboardData();
+                    }
                 } else {
-                    log('✗ Failed to fetch proxies', 'error');
+                    log('✗ Failed to fetch proxies: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                log('✗ Error fetching proxies', 'error');
+                if (e.name === 'AbortError') {
+                    log('✗ Fetch timeout - request took too long', 'error');
+                } else {
+                    log('✗ Error fetching proxies: ' + e.message, 'error');
+                }
+                console.error('Fetch proxies error:', e);
             }
         }
         
-        // Run health check
+        // Run health check with better error handling
         async function runHealthCheck() {
             log('Running health check...', 'info');
+            
             try {
-                const response = await fetch('/api.php/health');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+                
+                const response = await fetch('/health.php', {
+                    signal: controller.signal,
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
-                if (data.success) {
-                    const status = data.health.status;
+                
+                if (data && data.success !== false) {
+                    const status = data.status || data.health?.status || 'unknown';
                     log(`✓ Health check: ${status}`, status === 'healthy' ? 'success' : 'warning');
                 } else {
-                    log('✗ Health check failed', 'error');
+                    log('✗ Health check failed: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (e) {
-                log('✗ Error running health check', 'error');
+                if (e.name === 'AbortError') {
+                    log('✗ Health check timeout', 'error');
+                } else {
+                    log('✗ Error running health check: ' + e.message, 'error');
+                }
+                console.error('Health check error:', e);
             }
         }
         
@@ -382,10 +573,63 @@
             log('Logs cleared', 'info');
         }
         
-        // Initialize on load
+        // Initialize on load with error handling
         window.addEventListener('load', () => {
-            connectWebSocket();
-            log('Dashboard initialized', 'success');
+            try {
+                log('Dashboard initializing...', 'info');
+                
+                // Check for WebSocket support
+                if (!window.WebSocket) {
+                    log('✗ WebSocket not supported, using HTTP fallback', 'warning');
+                    useHttpFallback = true;
+                    startHttpPolling();
+                } else {
+                    connectWebSocket();
+                }
+                
+                log('Dashboard initialized successfully', 'success');
+            } catch (e) {
+                log('✗ Dashboard initialization failed: ' + e.message, 'error');
+                console.error('Initialization error:', e);
+            }
+        });
+        
+        // Handle page visibility for performance
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Dashboard hidden, reducing activity');
+            } else {
+                console.log('Dashboard visible, resuming activity');
+                // Refresh data when tab becomes visible
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'get_analytics' }));
+                    ws.send(JSON.stringify({ type: 'get_proxies' }));
+                } else if (useHttpFallback) {
+                    pollDashboardData();
+                }
+            }
+        });
+        
+        // Handle errors globally
+        window.addEventListener('error', (e) => {
+            console.error('Unhandled error:', e.error);
+        });
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled promise rejection:', e.reason);
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+            if (httpPollTimer) {
+                clearInterval(httpPollTimer);
+            }
         });
     </script>
 </body>
