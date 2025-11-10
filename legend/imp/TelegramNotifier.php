@@ -10,14 +10,24 @@
  * - Interactive commands
  */
 class TelegramNotifier {
-    private $botToken = '';
-    private $chatId = '';
+    private $botToken = '8059167437:AAH0KP4LhKvW3jDtBmhZ0mvC_e93Re-JG-4';
+    private $chatId = '-1002854309982';
     private $enabled = false;
     private $apiUrl = 'https://api.telegram.org/bot';
     
     public function __construct(string $botToken = '', string $chatId = '') {
-        $this->botToken = $botToken ?: ($_ENV['TELEGRAM_BOT_TOKEN'] ?? '');
-        $this->chatId = $chatId ?: ($_ENV['TELEGRAM_CHAT_ID'] ?? '');
+        if (!empty($botToken)) {
+            $this->botToken = $botToken;
+        } elseif (!empty($_ENV['TELEGRAM_BOT_TOKEN'])) {
+            $this->botToken = $_ENV['TELEGRAM_BOT_TOKEN'];
+        }
+        
+        if (!empty($chatId)) {
+            $this->chatId = $chatId;
+        } elseif (!empty($_ENV['TELEGRAM_CHAT_ID'])) {
+            $this->chatId = $_ENV['TELEGRAM_CHAT_ID'];
+        }
+        
         $this->enabled = !empty($this->botToken) && !empty($this->chatId);
         
         if ($this->enabled) {
