@@ -64,6 +64,11 @@ if ($autoMixMode && empty($_GET['sources'])) {
 }
 
 if (!$apiMode) {
+$controlCountValue = $desiredCount > 0 ? (string)$desiredCount : '';
+$controlTimeoutValue = (string)$timeout;
+$controlConcurrencyValue = (string)$concurrency;
+$controlProtocolsValue = htmlspecialchars($protocolsParam, ENT_QUOTES, 'UTF-8');
+$controlSourcesValue = htmlspecialchars($sourcesParam, ENT_QUOTES, 'UTF-8');
 echo "<!DOCTYPE html>
 <html>
 <head>
@@ -226,12 +231,47 @@ echo "<!DOCTYPE html>
         .type-https{background:#009688}
         .type-socks4{background:#8e44ad}
         .type-socks5{background:#e67e22}
+          .control-panel{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));background:rgba(102,126,234,0.08);padding:16px;border-radius:12px;margin:24px 0}
+          .control-panel label{display:block;font-size:12px;font-weight:600;color:#4c51bf;margin-bottom:6px}
+          .control-panel input{width:100%;padding:10px 12px;border:1px solid rgba(102,126,234,0.4);border-radius:8px;font-size:14px}
+          .control-panel .control-actions{grid-column:1 / -1;display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+          .control-panel button{background:#4c51bf;color:#fff;border:none;padding:10px 18px;border-radius:10px;cursor:pointer;font-size:14px}
+          .control-panel button:hover{background:#3b42a5}
+          .control-panel a.secondary{background:#f5f5f5;color:#4c51bf;padding:10px 16px;border-radius:10px;text-decoration:none;font-size:14px;border:1px solid rgba(102,126,234,0.3)}
+          .control-panel a.secondary:hover{background:#ede9fe}
     </style>
 </head>
 <body>
 <div class='container'>
     <h1>🔍 Proxy Fetcher & Tester</h1>
     <p class='subtitle'>Automatically scrape, test, and save working proxies from multiple sources</p>
+    <form class='control-panel' method='GET'>
+        <div>
+            <label for='countInput'>Target working proxies</label>
+            <input id='countInput' type='number' name='count' min='0' value='".htmlspecialchars($controlCountValue, ENT_QUOTES, 'UTF-8')."' placeholder='All (test every candidate)'>
+        </div>
+        <div>
+            <label for='timeoutInput'>Timeout (seconds)</label>
+            <input id='timeoutInput' type='number' name='timeout' min='1' value='".htmlspecialchars($controlTimeoutValue, ENT_QUOTES, 'UTF-8')."'>
+        </div>
+        <div>
+            <label for='concurrencyInput'>Concurrency</label>
+            <input id='concurrencyInput' type='number' name='concurrency' min='1' max='".FETCH_MAX_CONCURRENCY."' value='".htmlspecialchars($controlConcurrencyValue, ENT_QUOTES, 'UTF-8')."'>
+        </div>
+        <div>
+            <label for='protocolsInput'>Protocols (comma-separated)</label>
+            <input id='protocolsInput' type='text' name='protocols' value='".$controlProtocolsValue."'>
+        </div>
+        <div>
+            <label for='sourcesInput'>Sources (comma-separated)</label>
+            <input id='sourcesInput' type='text' name='sources' value='".$controlSourcesValue."'>
+        </div>
+        <div class='control-actions'>
+            <button type='submit'>Run Fetch</button>
+            <a class='secondary' href='?'>Reset Defaults</a>
+            <a class='secondary' href='jsonp.php?action=proxy-bootstrap&amp;count=50&amp;persist=1' target='_blank'>Run JSON API (50)</a>
+        </div>
+    </form>
     
     <div class='stats'>
         <div class='stat-box'>

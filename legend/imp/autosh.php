@@ -18,19 +18,47 @@ $maxRetries = 5;
 $retryCount = 0;
 $start_time = microtime(true);
 
-require_once 'ho.php';
+require_once __DIR__ . '/ho.php';
 $agent = new userAgent();
 $ua = $agent->generate('windows');
 
 // Proxy rotation setup: use ProxyManager to rotate proxy each request when available
-require_once 'ProxyManager.php';
+require_once __DIR__ . '/ProxyManager.php';
+require_once __DIR__ . '/lib/ProxyFetcher.php';
 $__pm = new ProxyManager();
 $__pm_count = file_exists('ProxyList.txt') ? $__pm->loadFromFile('ProxyList.txt') : 0;
 if (isset($_GET['debug'])) {
     error_log("[DEBUG] Loaded $__pm_count proxies from ProxyList.txt");
 }
-// Default: do NOT auto-rotate proxy per request (opt-in via ?rotate=1)
+
+$__proxy_bootstrap_diagnostics = null;
 $ROTATE_PROXY_PER_REQUEST = false;
+$noproxy_requested = isset($_GET['noproxy']);
+$GLOBALS['__captcha_notes'] = [];
+$GLOBALS['__captcha_math'] = null;
+$minimumPool = isset($_GET['minProxyPool']) ? max(0, (int)$_GET['minProxyPool']) : 15;
+if (!$noproxy_requested && $__pm_count < $minimumPool) {
+    try {
+        $fetchOptions = [
+            'target' => max($minimumPool * 2, 20),
+        ];
+        if (!empty($_GET['proxyProtocols'])) {
+            $fetchOptions['protocols'] = (string)$_GET['proxyProtocols'];
+        }
+        $proxyFetcher = new ProxyFetcher(__DIR__ . '/ProxyList.txt');
+        $proxyFetcher->ensureWorkingPool(max($minimumPool, 20), $fetchOptions);
+        $__proxy_bootstrap_diagnostics = $proxyFetcher->getDiagnostics();
+        $__pm = new ProxyManager();
+        $__pm_count = $__pm->loadFromFile('ProxyList.txt');
+        if ($__pm_count > 0 && !isset($_GET['rotate'])) {
+            $ROTATE_PROXY_PER_REQUEST = true;
+        }
+    } catch (Throwable $bootstrapError) {
+        $__proxy_bootstrap_diagnostics = [
+            'error' => $bootstrapError->getMessage(),
+        ];
+    }
+}
 // Optional runtime override: rotate=1|0 (ignored if a specific ?proxy= is supplied)
 if (!empty($_GET['rotate'])) {
     $rot = trim((string)$_GET['rotate']);
@@ -221,6 +249,54 @@ class CaptchaSolver {
     public static function requiresCaptcha(string $html): bool {
         $h = strtolower($html);
         return (strpos($h, 'hcaptcha') !== false || strpos($h, 'recaptcha') !== false || strpos($h, 'captcha') !== false);
+    }
+    public static function detectMathChallenge(string $html): ?array {
+        if (!preg_match('/(\d{1,3})\s*(?:\+|plus|\-|minus|x|×|\*|times|÷|\/|divided\s+by)\s*(\d{1,3})/i', $html, $m)) {
+            return null;
+        }
+        $a = (int)$m[1];
+        $b = (int)$m[2];
+        $operator = strtolower($m[0]);
+        $answer = null;
+        if (preg_match('/\+|plus/', $operator)) { $answer = $a + $b; }
+        elseif (preg_match('/\-|minus/', $operator)) { $answer = $a - $b; }
+        elseif (preg_match('/x|×|\*|times/', $operator)) { $answer = $a * $b; }
+        elseif (preg_match('/÷|\/|divided/', $operator) && $b !== 0) { $answer = $a / $b; }
+        if ($answer === null) {
+            return null;
+        }
+        return [
+            'expression' => trim($m[0]),
+            'answer' => $answer,
+        ];
+    }
+    public static function autoResolve(array $context): array {
+        $html = $context['html'] ?? '';
+        $result = [
+            'resolved' => false,
+            'html' => $html,
+            'notes' => [],
+        ];
+        if ($math = self::detectMathChallenge($html)) {
+            $result['math'] = $math;
+            $result['notes'][] = 'Detected math captcha: '.$math['expression'].' = '.$math['answer'];
+        }
+        $url = $context['url'] ?? null;
+        if ($url) {
+            $attempts = (int)($context['maxAttempts'] ?? 3);
+            $sleep = (int)($context['sleep'] ?? 2);
+            for ($i = 0; $i < $attempts; $i++) {
+                $skip = self::tryHeaderSkip($url, $context['cookieFile'] ?? null);
+                if ($skip['success'] && !self::requiresCaptcha($skip['response'] ?? '')) {
+                    $result['resolved'] = true;
+                    $result['html'] = $skip['response'];
+                    $result['notes'][] = 'Captcha cleared after retry #' . ($i + 1);
+                    break;
+                }
+                if ($sleep > 0) { sleep($sleep); }
+            }
+        }
+        return $result;
     }
     public static function tryHeaderSkip(string $url, ?string $cookieFile = null): array {
         $ch = curl_init($url);
@@ -687,10 +763,44 @@ return substr($content, $startPos, $endPos - $startPos);
 }
 
 function extractOperationQueryFromFile(string $filePath, string $operationName): ?string {
-    $content = @file_get_contents($filePath);
-    if ($content === false) {
+    static $cache = [];
+
+    $fullPath = $filePath;
+    if ($filePath[0] !== '/' && strpos($filePath, '://') === false) {
+        $fullPath = __DIR__ . '/' . ltrim($filePath, '/');
+    }
+
+    if (!isset($cache[$fullPath])) {
+        if (is_file($fullPath)) {
+            $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+            if ($ext === 'php') {
+                $data = include $fullPath;
+                if (is_array($data)) {
+                    $cache[$fullPath] = $data;
+                }
+            }
+        }
+
+        // Fallback for legacy flat-file format (old jsonp.php).
+        if (!isset($cache[$fullPath])) {
+            $content = @file_get_contents($fullPath);
+            if ($content !== false) {
+                $cache[$fullPath] = $content;
+            } else {
+                $cache[$fullPath] = null;
+            }
+        }
+    }
+
+    if (is_array($cache[$fullPath] ?? null)) {
+        return $cache[$fullPath][$operationName] ?? null;
+    }
+
+    if (!is_string($cache[$fullPath])) {
         return null;
     }
+
+    $content = $cache[$fullPath];
     $needles = [
         'Proposal' => "=> 'query Proposal(",
         'SubmitForCompletion' => "=> 'mutation SubmitForCompletion(",
@@ -1167,6 +1277,15 @@ function add_proxy_details_to_result(array $result_data, bool $proxy_used, strin
         'port' => $proxy_used && $proxy_port !== '' ? (int) $proxy_port : null,
         'string' => $proxy_used ? trim($proxy_ip . ($proxy_port !== '' ? ':' . $proxy_port : '')) : null,
     ];
+    if (isset($GLOBALS['__pm_count'])) {
+        $proxyBlock['pool'] = [
+            'available' => (int) $GLOBALS['__pm_count'],
+            'rotate_enabled' => (bool)($GLOBALS['ROTATE_PROXY_PER_REQUEST'] ?? false),
+        ];
+    }
+    if (!empty($GLOBALS['__proxy_bootstrap_diagnostics'])) {
+        $proxyBlock['bootstrap'] = $GLOBALS['__proxy_bootstrap_diagnostics'];
+    }
     $result_data['proxy'] = $proxyBlock;
 
     $primaryGateway = $GLOBALS['__gateway_primary'] ?? GatewayDetector::unknown();
@@ -1187,6 +1306,15 @@ function add_proxy_details_to_result(array $result_data, bool $proxy_used, strin
         if (!isset($result_data['Currency']) && isset($GLOBALS['__payment_context']['currency'])) {
             $result_data['Currency'] = $GLOBALS['__payment_context']['currency'];
         }
+    }
+    if (!empty($GLOBALS['__captcha_notes']) || !empty($GLOBALS['__captcha_math'])) {
+        $captchaBlock = [
+            'notes' => array_values(array_unique($GLOBALS['__captcha_notes'] ?? [])),
+        ];
+        if (!empty($GLOBALS['__captcha_math'])) {
+            $captchaBlock['math'] = $GLOBALS['__captcha_math'];
+        }
+        $result_data['captcha'] = $captchaBlock;
     }
 
     $durationMs = null;
@@ -1228,8 +1356,6 @@ $proxy_type = 'http'; // Default proxy type
 $proxy_status = 'N/A'; // Default status
 $proxy_used = false;
 
-// Check for noproxy parameter (bypasses all proxy usage)
-$noproxy_requested = isset($_GET['noproxy']);
 // Optional: require proxy strictly, otherwise fallback to direct when none available
 $require_proxy = false;
 if (isset($_GET['requireProxy'])) {
@@ -1892,13 +2018,25 @@ if (curl_errno($ch)) {
         send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
     }
 } else {
-    file_put_contents('php.php', $response );
+    file_put_contents(__DIR__ . '/checkout_last.html', $response);
     $finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-    // Captcha handling: if page shows captcha, attempt a header-skip once
+    // Captcha handling: attempt auto-resolution (math solver, header skip loop)
     if (CaptchaSolver::requiresCaptcha($response)) {
-        $skip = CaptchaSolver::tryHeaderSkip($finalUrl ?: ($urlbase.'/cart/'.$prodid.':1'), $cookie);
-        if ($skip['success']) {
-            $response = $skip['response'];
+        $resolve = CaptchaSolver::autoResolve([
+            'url' => $finalUrl ?: ($urlbase . '/cart/' . $prodid . ':1'),
+            'html' => $response,
+            'cookieFile' => $cookie,
+            'maxAttempts' => 3,
+            'sleep' => 2,
+        ]);
+        if ($resolve['resolved'] && isset($resolve['html'])) {
+            $response = $resolve['html'];
+        }
+        if (!empty($resolve['notes'])) {
+            $GLOBALS['__captcha_notes'] = array_merge($GLOBALS['__captcha_notes'], $resolve['notes']);
+        }
+        if (!empty($resolve['math'])) {
+            $GLOBALS['__captcha_math'] = $resolve['math'];
         }
     }
     $web_build_id = find_between($response, 'web_build_id&quot;:&quot;', '&quot;');
@@ -2068,7 +2206,7 @@ curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
     'x-checkout-web-source-id: ' . $checkoutToken,
     'Expect:',
 ]);
-$proposalQuery = extractOperationQueryFromFile('jsonp.php', 'Proposal');
+$proposalQuery = extractOperationQueryFromFile('graphql/operations.php', 'Proposal');
 $proposalPayload = [
         'query' => $proposalQuery,
         'variables' => [
@@ -2439,7 +2577,7 @@ if (empty($handle)) {
 //]);
 //    echo $resultg;
 if ($totalamt == '10.98' && $currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => extractOperationQueryFromFile('graphql/operations.php', 'SubmitForCompletion'),
                 'variables' => [
                     'input' => [
                         'sessionInput' => [
@@ -2639,7 +2777,7 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
             ]);
 }
 elseif ($currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => extractOperationQueryFromFile('graphql/operations.php', 'SubmitForCompletion'),
             'variables' => [
                 'input' => [
                     'sessionInput' => [
@@ -2856,7 +2994,7 @@ elseif ($currencycode == 'USD') {
         ]);    
 } 
 elseif ($currencycode == 'NZD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => extractOperationQueryFromFile('graphql/operations.php', 'SubmitForCompletion'),
         'variables' => [
             'input' => [
                 'sessionInput' => [
@@ -3058,7 +3196,7 @@ elseif ($currencycode == 'NZD') {
 }
 
  else {$postf = json_encode([
- 'query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),  
+ 'query' => extractOperationQueryFromFile('graphql/operations.php', 'SubmitForCompletion'),  
          'variables' => [
              'input' => [
                  'sessionInput' => [
@@ -3375,7 +3513,7 @@ elseif ($currencycode == 'NZD') {
  
  poll:
  $postf2 = json_encode([
-     'query' => extractOperationQueryFromFile('jsonp.php', 'PollForReceipt'),
+     'query' => extractOperationQueryFromFile('graphql/operations.php', 'PollForReceipt'),
      'variables' => [
          'receiptId' => $recipt_id,
          'sessionToken' => $x_checkout_one_session_token
