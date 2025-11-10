@@ -337,6 +337,7 @@ function h($value): string
         .status.orange { background: #ff9800; box-shadow: 0 3px 10px rgba(255, 152, 0, 0.35); }
         .status.teal { background: #009688; box-shadow: 0 3px 10px rgba(0, 150, 136, 0.35); }
         .status.blue { background: #3b82f6; box-shadow: 0 3px 10px rgba(59, 130, 246, 0.35); }
+        .status.purple { background: #8b5cf6; box-shadow: 0 3px 10px rgba(139, 92, 246, 0.35); }
 
         .grid {
             display: grid;
@@ -517,6 +518,7 @@ if ('serviceWorker' in navigator) {
             <span class="status">● Local Server Active</span>
             <span class="status orange">⚡ Latency-Optimised</span>
             <span class="status teal">⇄ 200x Parallel Proxy Tests</span>
+            <span class="status purple">🧠 Multi-Gateway Analysis</span>
             <span class="status blue" id="last-generated">⏱️ Snapshot: <?= h($dashboard['generatedAt']) ?></span>
         </div>
     </div>
@@ -628,18 +630,23 @@ if ('serviceWorker' in navigator) {
 
         <div class="card">
             <h2>💳 Payment Gateway Recon</h2>
-            <p>Autonomous gateway fingerprinting &amp; card orchestration with on-the-fly captcha mitigation.</p>
+            <p>Unified payment intelligence across Shopify, WooCommerce (Stripe, Razorpay, PayU) and hosted Stripe/Razorpay/PayU checkouts with live captcha mitigation.</p>
             <a href="test_proxy_system.php" class="btn btn-success" target="_blank">📡 Run Gateway Suite</a>
             <a href="autosh.php?cc=4111111111111111|12|2027|123&amp;site=https://example.myshopify.com" class="btn btn-warning" target="_blank">⚙️ Execute autosh</a>
+            <a href="autosh.php?mode=analysis&amp;site=https://store.example.com" class="btn" target="_blank" style="background:#8b5cf6;">🧠 Run Analysis Mode</a>
             <div class="code-block">
 curl https://localhost/autosh.php?cc=...<br>
   &amp;site=https://example.myshopify.com<br>
   &amp;rotate=1&amp;country=us&amp;format=json
             </div>
+            <div class="code-block">
+autosh.php?mode=analysis&amp;site=https://store.example.com<br>
+autosh.php?mode=analysis&amp;site=https://woo.example.com
+            </div>
             <div class="info-box" style="background:#fef3c7;border-left-color:#f59e0b;">
                 <h3>Gateway Coverage Highlights</h3>
-                <p>Stripe, PayPal/Braintree, Adyen, Checkout.com, Worldpay, Authorize.Net, PayU, Razorpay, Square, Klarna, Afterpay/Clearpay, Affirm, Cybersource, MercadoPago, Amazon Pay, PhonePe, Paytm &amp; more.</p>
-                <p>Instant JSON intelligence: risk hints, card-flow support, 3DS requirement flags, and proxy provenance.</p>
+                <p>Stripe, PayPal/Braintree, Adyen, Checkout.com, Worldpay, Authorize.Net, PayU, Razorpay, Square, Klarna, Afterpay/Clearpay, Affirm, Cybersource, MercadoPago, Amazon Pay, PhonePe, Paytm, WooCommerce Stripe/Razorpay/PayU &amp; more.</p>
+                <p>Instant JSON intelligence: risk hints, tokenisation requirements, publishable key extraction, 3DS flags, proxy provenance and cheapest-product discovery.</p>
             </div>
         </div>
 
@@ -721,12 +728,24 @@ autosh.php?...&amp;cto=4&amp;to=20&amp;v4=1&amp;format=json
         </div>
     </div>
 
+    <div class="info-box" style="background:#ede9fe;border-left-color:#8b5cf6;">
+        <h3>🧠 Analysis Mode (Multi-Platform)</h3>
+        <p><strong>Discovery only:</strong> zero card traffic is sent. Collect publishable keys, available gateways, WooCommerce payment methods, cheapest product metadata and JS tokenisation requirements.</p>
+        <div class="code-block">
+autosh.php?mode=analysis&amp;site=https://store.example.com<br>
+autosh.php?mode=analysis&amp;site=https://woo.example.com<br>
+autosh.php?mode=analysis&amp;site=https://checkout.stripe.com/pay/SESSION
+        </div>
+        <p style="margin-top:10px;">Outputs include <code>GatewayCandidates</code>, <code>PublishableKeys</code>, <code>PaymentMethods</code>, <code>CheapestProduct</code>, proxy provenance and timing metadata.</p>
+    </div>
+
     <div class="card" style="margin-top:24px;">
         <h2>📁 Toolkit Files</h2>
         <p style="color:#4a5568; font-size:13px;">
             <strong>ProxyManager.php</strong> &ndash; Rotation engine with health tracking<br>
             <strong>fetch_proxies.php</strong> &ndash; High-speed scraping + validation<br>
             <strong>autosh.php</strong> &ndash; Shopfiy-native multi-gateway executor<br>
+            <strong>PaymentPlatformEngine.php</strong> &ndash; Platform detection + analysis helpers (Stripe, WooCommerce, Razorpay, PayU)<br>
             <strong>proxy_cache_refresh.php</strong> &ndash; Scheduled pruning<br>
             <strong>test_proxy_system.php</strong> &ndash; End-to-end diagnostics<br>
             <strong>SETUP_GUIDE.txt</strong> &ndash; Fast start companion
