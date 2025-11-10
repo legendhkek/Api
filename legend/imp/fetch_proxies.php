@@ -67,7 +67,7 @@ if (!$apiMode) {
 echo "<!DOCTYPE html>
 <html>
 <head>
-    <title>Proxy Fetcher & Tester</title>
+    <title>Proxy Fetcher & Tester - @LEGEND_BL</title>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -232,6 +232,7 @@ echo "<!DOCTYPE html>
 <div class='container'>
     <h1>🔍 Proxy Fetcher & Tester</h1>
     <p class='subtitle'>Automatically scrape, test, and save working proxies from multiple sources</p>
+    <p class='subtitle' style='font-size: 12px; margin-top: -5px;'>Owner: <strong>@LEGEND_BL</strong></p>
     
     <div class='stats'>
         <div class='stat-box'>

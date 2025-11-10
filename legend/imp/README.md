@@ -2,6 +2,8 @@
 
 A professional-grade proxy management system with ML-based quality scoring, automatic health monitoring, advanced captcha solving, real-time analytics, and comprehensive API.
 
+**Owner:** @LEGEND_BL
+
 ---
 
 ## ✨ Features
@@ -767,9 +769,12 @@ Include:
 
 ---
 
-## 📜 License
+## 📜 License & Ownership
 
+**Owner:** @LEGEND_BL  
 This is proprietary software. All rights reserved.
+
+**Contact:** @LEGEND_BL on Telegram
 
 ---
 
@@ -793,4 +798,5 @@ You now have a **professional-grade proxy management system** with:
 ---
 
 **Version:** 3.0.0  
-**Last Updated:** 2025-11-10
+**Last Updated:** 2025-11-10  
+**Owner:** @LEGEND_BL

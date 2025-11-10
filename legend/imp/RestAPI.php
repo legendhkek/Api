@@ -1,6 +1,7 @@
 <?php
 /**
  * Full REST API with Authentication
+ * Owner: @LEGEND_BL
  * 
  * Features:
  * - JWT-based authentication
@@ -490,7 +491,12 @@ class RestAPI {
         $monitor = new HealthMonitor();
         $health = $monitor->runHealthCheck(false);
         
-        return ['success' => true, 'health' => $health];
+        return [
+            'success' => true, 
+            'health' => $health,
+            'owner' => '@LEGEND_BL',
+            'system' => 'Advanced Proxy Management System'
+        ];
     }
     
     /**

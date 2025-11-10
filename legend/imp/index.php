@@ -510,6 +510,9 @@ if ('serviceWorker' in navigator) {
             all orchestrated from a single high-velocity command center. Built for concurrency <strong>200×</strong>,
             tuned for stealth, and ready for enterprise-grade card flows.
         </p>
+        <p class="subtitle" style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
+            <strong>Owner:</strong> @LEGEND_BL
+        </p>
         <div class="status-row">
             <span class="status">● Local Server Active</span>
             <span class="status orange">⚡ Latency-Optimised</span>

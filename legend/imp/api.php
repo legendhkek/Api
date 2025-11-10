@@ -1,6 +1,7 @@
 <?php
 /**
  * REST API Endpoint
+ * Owner: @LEGEND_BL
  * 
  * Usage:
  * POST /api.php/login - Login and get JWT token
