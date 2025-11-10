@@ -275,6 +275,28 @@ if (isset($_GET['stats'])) {
 
 $dashboard = get_dashboard_data();
 
+$proxyTotal = $dashboard['proxies']['total'];
+$uniqueCoverage = $proxyTotal > 0 ? (int) round(($dashboard['proxies']['unique'] / $proxyTotal) * 100) : 0;
+$authCoverage = $proxyTotal > 0 ? (int) round(($dashboard['proxies']['withAuth'] / $proxyTotal) * 100) : 0;
+$noAuthCoverage = $proxyTotal > 0 ? max(0, 100 - $authCoverage) : 0;
+$concurrencyCap = max(1, (int) ($dashboard['system']['concurrencyCap'] ?? DASHBOARD_CONCURRENCY_LIMIT));
+$availabilityScore = $dashboard['proxies']['unique'] > 0 ? (int) min(100, round(($dashboard['proxies']['unique'] / $concurrencyCap) * 100)) : 0;
+$generatedTimestamp = strtotime($dashboard['generatedAt'] ?? '') ?: time();
+$generatedTimeShort = date('H:i:s', $generatedTimestamp);
+
+$topProxyType = null;
+$topProxyTypeCount = 0;
+$topProxyTypeShare = 0;
+if (!empty($dashboard['proxies']['byType'])) {
+    $sortedTypes = $dashboard['proxies']['byType'];
+    arsort($sortedTypes);
+    $topProxyType = (string) key($sortedTypes);
+    $topProxyTypeCount = (int) current($sortedTypes);
+    if ($proxyTotal > 0) {
+        $topProxyTypeShare = (int) round(($topProxyTypeCount / max(1, $proxyTotal)) * 100);
+    }
+}
+
 /**
  * HTML-escape helper.
  *
@@ -311,59 +333,228 @@ function h($value): string
             --dark: #1e293b;
             --light: #f8fafc;
             --gray: #64748b;
-            --border: #e2e8f0;
+            --muted: #64748b;
+            --border: rgba(226, 232, 240, 0.7);
+            --border-strong: rgba(148, 163, 184, 0.4);
+            --surface: rgba(255, 255, 255, 0.96);
+            --surface-soft: rgba(255, 255, 255, 0.75);
+            --surface-strong: rgba(255, 255, 255, 1);
+            --chip-bg: rgba(99, 102, 241, 0.12);
+            --chip-border: rgba(99, 102, 241, 0.35);
+            --page-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --shadow-soft: 0 20px 60px rgba(15, 23, 42, 0.16);
+            --shadow-strong: 0 25px 80px rgba(15, 23, 42, 0.35);
+            --glass-blur: 14px;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--page-gradient);
+            background-attachment: fixed;
             min-height: 100vh;
-            padding: 20px;
+            padding: 24px;
             color: var(--dark);
             line-height: 1.6;
+            transition: background 0.6s ease, color 0.4s ease;
+            position: relative;
+            color-scheme: light;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at top left, rgba(148, 163, 255, 0.25) 0%, rgba(255, 255, 255, 0) 55%),
+                        radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.2) 0%, rgba(12, 6, 105, 0.1) 45%, rgba(12, 6, 105, 0) 65%);
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        body[data-theme="dark"] {
+            --page-gradient: radial-gradient(circle at 20% 20%, #312e81 0%, #0b1120 55%, #020617 100%);
+            --surface: rgba(17, 24, 39, 0.9);
+            --surface-soft: rgba(30, 41, 59, 0.55);
+            --surface-strong: rgba(15, 23, 42, 0.88);
+            --dark: #f8fafc;
+            --gray: #94a3b8;
+            --muted: #a5b4fc;
+            --light: #0f172a;
+            --border: rgba(148, 163, 184, 0.25);
+            --border-strong: rgba(99, 102, 241, 0.35);
+            --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.5);
+            --shadow-strong: 0 30px 80px rgba(2, 6, 23, 0.75);
+            --chip-bg: rgba(129, 140, 248, 0.18);
+            --chip-border: rgba(129, 140, 248, 0.4);
+            color-scheme: dark;
+        }
+
+        body[data-theme="dark"]::before {
+            opacity: 0.55;
+            background: radial-gradient(circle at 20% 20%, rgba(79, 70, 229, 0.3) 0%, rgba(12, 10, 35, 0.15) 50%, rgba(12, 10, 35, 0) 70%),
+                        radial-gradient(circle at 80% 80%, rgba(244, 114, 182, 0.25) 0%, rgba(2, 6, 23, 0.6) 60%, rgba(2, 6, 23, 0) 80%);
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.98);
-            border-radius: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: 24px;
             padding: 40px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-strong);
             position: relative;
             overflow: hidden;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(var(--glass-blur));
+            transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
         }
 
         .header::before {
             content: "";
             position: absolute;
-            top: 0;
-            right: 0;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.1), transparent);
+            inset: -120px auto auto 55%;
+            width: 460px;
+            height: 460px;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.35), rgba(99, 102, 241, 0.08) 45%, transparent 70%);
+            filter: blur(0);
             pointer-events: none;
+            transition: opacity 0.4s ease;
         }
 
         h1 {
-            color: #3730a3;
-            margin-bottom: 15px;
-            font-size: 36px;
+            color: var(--primary-dark);
+            margin-bottom: 12px;
+            font-size: 38px;
             font-weight: 800;
             display: flex;
             align-items: center;
             gap: 15px;
             position: relative;
+            letter-spacing: -0.02em;
         }
 
         h1 span {
             font-size: 42px;
             animation: pulse 2s ease-in-out infinite;
+        }
+
+        .header-top {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--chip-bg);
+            color: var(--primary-dark);
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--chip-border);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+        }
+
+        body[data-theme="dark"] .toolbar-chip {
+            color: #e0e7ff;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            position: relative;
+            box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.25);
+        }
+
+        .pulse-dot::after {
+            content: "";
+            position: absolute;
+            inset: -6px;
+            border-radius: inherit;
+            border: 2px solid rgba(16, 185, 129, 0.25);
+            animation: ripple 2.4s infinite ease-out;
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(0.6); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        .toolbar-btn {
+            position: relative;
+            border: 1px solid var(--border-strong);
+            background: var(--surface-strong);
+            border-radius: 999px;
+            padding: 8px 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--dark);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 25px rgba(15, 23, 42, 0.16);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.4s ease, color 0.4s ease;
+        }
+
+        .toolbar-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 15px 35px rgba(99, 102, 241, 0.25);
+        }
+
+        .toolbar-btn .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: transform 0.4s ease, opacity 0.3s ease;
+        }
+
+        .toolbar-btn .moon {
+            position: absolute;
+            right: 16px;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        body[data-theme="dark"] .toolbar-btn {
+            color: #e2e8f0;
+        }
+
+        body[data-theme="dark"] .toolbar-btn .sun {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        body[data-theme="dark"] .toolbar-btn .moon {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toolbar-label {
+            padding-left: 24px;
         }
 
         @keyframes pulse {
@@ -372,11 +563,11 @@ function h($value): string
         }
 
         .subtitle {
-            color: #475569;
+            color: var(--muted);
             font-size: 16px;
             line-height: 1.7;
             max-width: 900px;
-            margin-bottom: 10px;
+            margin-bottom: 16px;
         }
 
         .owner-badge {
@@ -391,6 +582,27 @@ function h($value): string
             font-size: 14px;
             margin-top: 15px;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .owner-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .owner-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface-soft);
+            color: var(--gray);
+            padding: 8px 16px;
+            border-radius: 18px;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
         }
 
         .status-row {
@@ -423,15 +635,253 @@ function h($value): string
         .status.blue { background: var(--info); box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
         .status.purple { background: var(--secondary); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); }
 
+        .telemetry {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+
+        .telemetry-item {
+            flex: 1 1 220px;
+            background: var(--surface-soft);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px 18px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .telemetry-item::after {
+            content: "";
+            position: absolute;
+            inset: -60% 60% auto -40%;
+            height: 160%;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.05));
+            opacity: 0.4;
+            pointer-events: none;
+            transform: rotate(12deg);
+        }
+
+        .telemetry-item .label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--gray);
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .telemetry-item .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--dark);
+            position: relative;
+            z-index: 1;
+        }
+
+        .telemetry-item .sub {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--gray);
+            position: relative;
+            z-index: 1;
+        }
+
+        .micro-bar {
+            position: relative;
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.2);
+            margin-top: 12px;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .micro-bar::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            width: var(--progress, 0%);
+            max-width: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .header-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .gauge-card {
+            flex: 1 1 260px;
+            background: var(--surface-soft);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            position: relative;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+            overflow: hidden;
+        }
+
+        .gauge-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -60px -120px 40%;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle at center, rgba(129, 140, 248, 0.18), transparent 65%);
+            pointer-events: none;
+        }
+
+        .radial-gauge {
+            --value: 64;
+            width: 140px;
+            aspect-ratio: 1 / 1;
+            border-radius: 50%;
+            background: conic-gradient(var(--primary) calc(var(--value) * 1%), rgba(99, 102, 241, 0.15) 0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            position: relative;
+            box-shadow: 0 12px 30px rgba(99, 102, 241, 0.18);
+        }
+
+        .radial-gauge::before {
+            content: "";
+            position: absolute;
+            inset: 12px;
+            background: var(--surface);
+            border-radius: 50%;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        }
+
+        .radial-inner {
+            position: relative;
+            text-align: center;
+        }
+
+        .radial-inner span {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--primary-dark);
+            display: block;
+        }
+
+        .radial-inner small {
+            display: block;
+            font-size: 12px;
+            color: var(--gray);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .gauge-caption {
+            text-align: center;
+            font-size: 13px;
+            color: var(--gray);
+            margin-top: 6px;
+        }
+
+        .gauge-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .meta-label {
+            display: block;
+            font-size: 13px;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .meta-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .meta-pill {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        .meta-pill.secondary {
+            background: rgba(139, 92, 246, 0.18);
+            color: var(--secondary);
+            border: 1px solid rgba(139, 92, 246, 0.45);
+        }
+
+        .insight-progress {
+            position: relative;
+            height: 12px;
+            border-radius: 12px;
+            background: rgba(99, 102, 241, 0.12);
+            overflow: hidden;
+        }
+
+        .insight-progress::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            width: var(--progress, 0%);
+            max-width: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .gauge-split {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        .split-label {
+            display: block;
+            font-weight: 600;
+            color: var(--gray);
+        }
+
+        .split-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 25px;
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--surface);
+            border: 1px solid var(--border);
             padding: 15px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+            box-shadow: var(--shadow-soft);
             overflow-x: auto;
+            backdrop-filter: blur(var(--glass-blur));
         }
 
         .tab {
@@ -481,13 +931,14 @@ function h($value): string
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.98);
+            background: var(--surface);
             border-radius: 20px;
             padding: 30px;
-            box-shadow: 0 15px 40px rgba(15, 23, 42, 0.2);
+            box-shadow: var(--shadow-soft);
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            border: 1px solid var(--border);
         }
 
         .card::before {
@@ -603,6 +1054,12 @@ function h($value): string
             box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
+        body[data-theme="dark"] .code-block {
+            background: #020617;
+            color: #e2e8f0;
+            box-shadow: inset 0 2px 12px rgba(15, 23, 42, 0.7);
+        }
+
         .info-box {
             background: linear-gradient(135deg, #eff6ff, #dbeafe);
             border-left: 4px solid var(--info);
@@ -612,6 +1069,12 @@ function h($value): string
             box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
         }
 
+        body[data-theme="dark"] .info-box {
+            background: linear-gradient(135deg, rgba(30, 64, 175, 0.55), rgba(30, 64, 175, 0.25));
+            color: #e2e8f0;
+            box-shadow: 0 8px 25px rgba(30, 64, 175, 0.35);
+        }
+
         .info-box h3 {
             color: #1e40af;
             margin-bottom: 12px;
@@ -619,11 +1082,19 @@ function h($value): string
             font-weight: 700;
         }
 
+        body[data-theme="dark"] .info-box h3 {
+            color: #bfdbfe;
+        }
+
         .info-box p {
             color: #1e293b;
             font-size: 14px;
             margin: 6px 0;
             line-height: 1.6;
+        }
+
+        body[data-theme="dark"] .info-box p {
+            color: #e2e8f0;
         }
 
         .info-box.success {
@@ -754,10 +1225,12 @@ function h($value): string
         }
 
         form {
-            background: #f8fafc;
+            background: var(--surface-soft);
             padding: 20px;
             border-radius: 12px;
             margin-top: 15px;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
         }
 
         form label {
@@ -796,8 +1269,88 @@ function h($value): string
                 font-size: 28px;
             }
 
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .toolbar {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .owner-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-metrics {
+                flex-direction: column;
+            }
+
             .tabs {
                 overflow-x: scroll;
+            }
+        }
+
+        .fab {
+            position: fixed;
+            right: 32px;
+            bottom: 32px;
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: var(--shadow-strong);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.4s ease;
+            z-index: 50;
+        }
+
+        .fab:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 25px 70px rgba(99, 102, 241, 0.4);
+        }
+
+        .fab:active {
+            transform: scale(0.96);
+        }
+
+        .fab .fab-icon {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .fab .fab-icon.loading {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        .fab.is-loading .fab-icon.default {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        .fab.is-loading .fab-icon.loading {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        @media (max-width: 768px) {
+            .fab {
+                right: 24px;
+                bottom: 24px;
             }
         }
 
@@ -826,33 +1379,129 @@ if ('serviceWorker' in navigator) {
 </script>
 <div class="container">
     <div class="header">
-        <h1><span>🎯</span> Advanced Payment & Proxy Intelligence Hub</h1>
+        <div class="header-top">
+            <h1><span>🎯</span> Advanced Payment & Proxy Intelligence Hub</h1>
+            <div class="toolbar">
+                <div class="toolbar-chip">
+                    <span class="pulse-dot"></span>
+                    Live Telemetry
+                </div>
+                <button type="button" class="toolbar-btn" id="theme-toggle" aria-label="Toggle theme" aria-pressed="false">
+                    <span class="icon sun">☀️</span>
+                    <span class="icon moon">🌙</span>
+                    <span class="toolbar-label" id="theme-toggle-label">Light</span>
+                </button>
+            </div>
+        </div>
         <p class="subtitle">
             Enterprise-grade proxy rotation system with multi-gateway payment reconnaissance. 
             Supports <strong>50+ payment gateways</strong> including Stripe, PayPal, Razorpay, PayU, WooCommerce, 
             Shopify and more. Features automated proxy scraping from <strong>12+ sources</strong>, 
             concurrent testing at <strong>200× parallelism</strong>, and real-time health monitoring.
         </p>
-        <div class="owner-badge">
-            👑 Powered by @LEGEND_BL
+        <div class="owner-row">
+            <div class="owner-badge">
+                👑 Powered by @LEGEND_BL
+            </div>
+            <div class="owner-chip">
+                <span>🖥️</span>
+                <span><?= h($dashboard['system']['serverSoftware']) ?></span>
+            </div>
+            <div class="owner-chip">
+                <span>📂</span>
+                <span><?= h(basename((string) $dashboard['system']['cwd'])) ?></span>
+            </div>
+        </div>
+        <div class="telemetry">
+            <div class="telemetry-item">
+                <span class="label">Last Sync</span>
+                <span class="value" id="telemetry-generated"><?= h($generatedTimeShort) ?></span>
+                <span class="sub">Auto refresh every 15s</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="label">Auth Coverage</span>
+                <span class="value"><span id="auth-coverage-value"><?= h($authCoverage) ?>%</span></span>
+                <div class="micro-bar" id="auth-coverage-bar" style="--progress: <?= $authCoverage ?>%;"></div>
+                <span class="sub">Authenticated proxies in pool</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="label">Top Protocol</span>
+                <span class="value" id="top-proxy-type"><?= $topProxyType ? h(strtoupper($topProxyType)) : '—' ?></span>
+                <span class="sub" id="top-proxy-share">
+                    <?php if ($topProxyType): ?>
+                        <?= h($topProxyTypeShare . '% share • ' . $topProxyTypeCount . ' endpoints') ?>
+                    <?php else: ?>
+                        No data available
+                    <?php endif; ?>
+                </span>
+            </div>
         </div>
         <div class="status-row">
             <span class="status">● Server Active</span>
             <span class="status orange">⚡ 40-70% Faster</span>
-            <span class="status teal">⇄ 200x Concurrency</span>
+            <span class="status teal">⇄ <?= h($concurrencyCap) ?>x Concurrency</span>
             <span class="status blue">🌐 50+ Gateways</span>
+            <span class="status purple" id="coverage-pill">🛡️ <?= h($uniqueCoverage) ?>% Coverage</span>
             <span class="status purple" id="last-update">⏱️ <?= h(date('H:i:s')) ?></span>
+        </div>
+        <div class="header-metrics">
+            <div class="gauge-card">
+                <div class="radial-gauge" data-gauge="availability" style="--value: <?= $availabilityScore ?>;">
+                    <div class="radial-inner">
+                        <span id="availability-score"><?= h($availabilityScore) ?>%</span>
+                        <small>Availability</small>
+                    </div>
+                </div>
+                <p class="gauge-caption">Unique proxy coverage vs <?= h($concurrencyCap) ?> concurrency cap</p>
+            </div>
+            <div class="gauge-card">
+                <div class="gauge-meta">
+                    <div>
+                        <span class="meta-label">Unique Coverage</span>
+                        <span class="meta-value" id="unique-coverage-value"><?= h($uniqueCoverage) ?>%</span>
+                    </div>
+                    <div class="meta-pill">Operational</div>
+                </div>
+                <div class="insight-progress" id="unique-coverage-bar" style="--progress: <?= $uniqueCoverage ?>%;"></div>
+                <div class="gauge-split">
+                    <div>
+                        <span class="split-label">Auth</span>
+                        <span class="split-value" id="auth-split"><?= h($authCoverage) ?>%</span>
+                    </div>
+                    <div>
+                        <span class="split-label">Open</span>
+                        <span class="split-value" id="noauth-split"><?= h($noAuthCoverage) ?>%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="gauge-card">
+                <div class="gauge-meta">
+                    <div>
+                        <span class="meta-label">Top Protocol</span>
+                        <span class="meta-value" id="gauge-top-protocol"><?= $topProxyType ? h(strtoupper($topProxyType)) : 'N/A' ?></span>
+                    </div>
+                    <div class="meta-pill secondary">Signal</div>
+                </div>
+                <div class="insight-progress" id="top-protocol-bar" style="--progress: <?= $topProxyTypeShare ?>%;"></div>
+                <p class="gauge-caption" id="top-protocol-caption">
+                    <?php if ($topProxyType): ?>
+                        <?= h($topProxyTypeShare . '% of inventory • ' . $topProxyTypeCount . ' endpoints') ?>
+                    <?php else: ?>
+                        Upload proxy list to unlock insights
+                    <?php endif; ?>
+                </p>
+            </div>
         </div>
     </div>
 
     <!-- Navigation Tabs -->
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-        <button class="tab" onclick="switchTab('gateways')">💳 Payment Gateways</button>
-        <button class="tab" onclick="switchTab('proxies')">🌐 Proxy Manager</button>
-        <button class="tab" onclick="switchTab('tools')">🛠️ Tools & Tests</button>
-        <button class="tab" onclick="switchTab('logs')">📈 Logs & Analytics</button>
-        <button class="tab" onclick="switchTab('docs')">📚 Documentation</button>
+        <button class="tab active" onclick="switchTab('dashboard', this)">📊 Dashboard</button>
+        <button class="tab" onclick="switchTab('gateways', this)">💳 Payment Gateways</button>
+        <button class="tab" onclick="switchTab('proxies', this)">🌐 Proxy Manager</button>
+        <button class="tab" onclick="switchTab('tools', this)">🛠️ Tools & Tests</button>
+        <button class="tab" onclick="switchTab('logs', this)">📈 Logs & Analytics</button>
+        <button class="tab" onclick="switchTab('docs', this)">📚 Documentation</button>
     </div>
 
     <!-- Dashboard Tab -->
@@ -1300,126 +1949,327 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
     </div>
 </div>
 
+<button type="button" id="refresh-fab" class="fab" aria-label="Refresh dashboard">
+    <span class="fab-icon default">⟳</span>
+    <span class="fab-icon loading"><span class="loading"></span></span>
+</button>
+
 <script>
 const dashboardState = <?= json_encode($dashboard, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const themeToggle = document.getElementById('theme-toggle');
+const themeLabel = document.getElementById('theme-toggle-label');
+const refreshFab = document.getElementById('refresh-fab');
+const FALLBACK_CONCURRENCY = <?= $concurrencyCap ?>;
 
-// Tab switching
-function switchTab(tabName) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Add active class to clicked button
-    event.target.classList.add('active');
+const ENTITY_MAP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+};
+
+function escapeHtml(value) {
+    const str = value === undefined || value === null ? '' : String(value);
+    return str.replace(/[&<>"']/g, char => ENTITY_MAP[char] || char);
 }
 
-// Gateway search filter
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.textContent = value;
+    }
+}
+
+function switchTab(tabName, button) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
+    const targetTab = document.getElementById(tabName + '-tab');
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
+    if (button) {
+        button.classList.add('active');
+        button.blur();
+    }
+}
+
 function filterGateways() {
-    const searchTerm = document.getElementById('gateway-search').value.toLowerCase();
-    const cards = document.querySelectorAll('.gateway-card');
-    
-    cards.forEach(card => {
-        const name = card.getAttribute('data-name');
-        const category = card.getAttribute('data-category');
-        
-        if (name.includes(searchTerm) || category.includes(searchTerm)) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
-        }
+    const input = document.getElementById('gateway-search');
+    const searchTerm = input ? input.value.toLowerCase() : '';
+    document.querySelectorAll('.gateway-card').forEach(card => {
+        const name = (card.getAttribute('data-name') || '').toLowerCase();
+        const category = (card.getAttribute('data-category') || '').toLowerCase();
+        const matches = !searchTerm || name.includes(searchTerm) || category.includes(searchTerm);
+        card.style.display = matches ? '' : 'none';
     });
 }
 
-// Refresh dashboard data
-function refreshDashboard() {
-    fetch('index.php?stats=1', {cache: 'no-store'})
-        .then(resp => resp.json())
-        .then(data => {
-            // Update metrics
-            const setText = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value;
-            };
+function deriveInsights(data) {
+    const proxies = data && data.proxies ? data.proxies : {};
+    const system = data && data.system ? data.system : {};
+    const total = Number(proxies.total || 0);
+    const unique = Number(proxies.unique || 0);
+    const withAuth = Number(proxies.withAuth || 0);
+    const concurrency = Number(system.concurrencyCap || FALLBACK_CONCURRENCY) || 1;
+    const uniqueCoverage = total > 0 ? Math.round((unique / total) * 100) : 0;
+    const authCoverage = total > 0 ? Math.round((withAuth / total) * 100) : 0;
+    const noAuthCoverage = total > 0 ? Math.max(0, 100 - authCoverage) : 0;
+    const availability = unique > 0 ? Math.min(100, Math.round((unique / concurrency) * 100)) : 0;
 
-            setText('proxy-total', data.proxies.total);
-            setText('proxy-total-stat', data.proxies.total);
-            setText('proxy-unique', data.proxies.unique);
-            setText('proxy-unique-stat', data.proxies.unique);
-            setText('proxy-auth', data.proxies.withAuth);
-            setText('proxy-noauth', data.proxies.withoutAuth);
-            setText('proxy-updated', data.proxies.lastUpdatedHuman);
-            setText('health-last', data.system.lastHealthCheckHuman);
-            setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+    const byType = proxies.byType || {};
+    const entries = Object.keys(byType).map(key => [key, Number(byType[key])]);
+    entries.sort((a, b) => b[1] - a[1]);
 
-            // Update proxy types
-            const typesContainer = document.getElementById('proxy-types');
-            if (typesContainer && data.proxies.byType) {
-                typesContainer.innerHTML = '';
-                Object.keys(data.proxies.byType).sort().forEach(type => {
-                    const div = document.createElement('div');
-                    div.style.margin = '5px 0';
-                    div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${data.proxies.byType[type]}`;
-                    typesContainer.appendChild(div);
-                });
-            }
+    const top = entries.length > 0 ? entries[0] : null;
+    const topProtocol = top ? top[0] : null;
+    const topProtocolCount = top ? top[1] : 0;
+    const topProtocolShare = total > 0 ? Math.round((topProtocolCount / total) * 100) : 0;
 
-            // Update proxy sample
-            const sampleContainer = document.getElementById('proxy-sample');
-            if (sampleContainer && data.proxies.sample) {
-                sampleContainer.innerHTML = '';
-                if (data.proxies.sample.length === 0) {
-                    sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
-                } else {
-                    data.proxies.sample.forEach(item => {
-                        sampleContainer.innerHTML += item + '<br>';
-                    });
-                }
-            }
+    return {
+        total,
+        unique,
+        withAuth,
+        uniqueCoverage,
+        authCoverage,
+        noAuthCoverage,
+        availability,
+        topProtocol,
+        topProtocolCount,
+        topProtocolShare,
+        concurrency
+    };
+}
 
-            // Update logs
-            updateLog('proxy-log', data.logs.proxy);
-            updateLog('rotation-log', data.logs.rotation);
-        })
-        .catch(() => {
-            console.log('Dashboard refresh failed, will retry...');
-        });
+function updateInsights(data) {
+    const insights = deriveInsights(data);
+    setText('auth-coverage-value', insights.authCoverage + '%');
+    const authBar = document.getElementById('auth-coverage-bar');
+    if (authBar) {
+        authBar.style.setProperty('--progress', insights.authCoverage + '%');
+    }
+
+    setText('unique-coverage-value', insights.uniqueCoverage + '%');
+    const uniqueBar = document.getElementById('unique-coverage-bar');
+    if (uniqueBar) {
+        uniqueBar.style.setProperty('--progress', insights.uniqueCoverage + '%');
+    }
+
+    setText('auth-split', insights.authCoverage + '%');
+    setText('noauth-split', insights.noAuthCoverage + '%');
+
+    const radial = document.querySelector('[data-gauge="availability"]');
+    if (radial) {
+        radial.style.setProperty('--value', insights.availability);
+    }
+    setText('availability-score', insights.availability + '%');
+
+    setText('top-proxy-type', insights.topProtocol ? insights.topProtocol.toUpperCase() : '—');
+    const topShareEl = document.getElementById('top-proxy-share');
+    if (topShareEl) {
+        topShareEl.textContent = insights.topProtocol
+            ? insights.topProtocolShare + '% share • ' + insights.topProtocolCount + ' endpoints'
+            : 'No data available';
+    }
+
+    setText('gauge-top-protocol', insights.topProtocol ? insights.topProtocol.toUpperCase() : 'N/A');
+    const topBar = document.getElementById('top-protocol-bar');
+    if (topBar) {
+        topBar.style.setProperty('--progress', insights.topProtocolShare + '%');
+    }
+    const topCaption = document.getElementById('top-protocol-caption');
+    if (topCaption) {
+        topCaption.textContent = insights.topProtocol
+            ? insights.topProtocolShare + '% of inventory • ' + insights.topProtocolCount + ' endpoints'
+            : 'Upload proxy list to unlock insights';
+    }
+
+    const coveragePill = document.getElementById('coverage-pill');
+    if (coveragePill) {
+        coveragePill.textContent = '🛡️ ' + insights.uniqueCoverage + '% Coverage';
+    }
+}
+
+function updateMetrics(data) {
+    const proxies = data && data.proxies ? data.proxies : {};
+    const system = data && data.system ? data.system : {};
+
+    setText('proxy-total', proxies.total || 0);
+    setText('proxy-total-stat', proxies.total || 0);
+    setText('proxy-unique', proxies.unique || 0);
+    setText('proxy-unique-stat', proxies.unique || 0);
+    setText('proxy-auth', proxies.withAuth || 0);
+    setText('proxy-noauth', proxies.withoutAuth || 0);
+    setText('proxy-updated', proxies.lastUpdatedHuman || 'Never');
+    setText('health-last', system.lastHealthCheckHuman || 'Never');
+
+    const typesContainer = document.getElementById('proxy-types');
+    if (typesContainer) {
+        typesContainer.innerHTML = '';
+        const byType = proxies.byType || {};
+        const sortedTypes = Object.keys(byType).sort();
+        if (sortedTypes.length === 0) {
+            typesContainer.textContent = 'No proxies loaded.';
+        } else {
+            sortedTypes.forEach(type => {
+                const div = document.createElement('div');
+                div.style.margin = '5px 0';
+                div.innerHTML = '<strong>' + escapeHtml(type.toUpperCase()) + ':</strong> ' + escapeHtml(byType[type]);
+                typesContainer.appendChild(div);
+            });
+        }
+    }
+
+    const sampleContainer = document.getElementById('proxy-sample');
+    if (sampleContainer) {
+        const sample = proxies.sample || [];
+        if (sample.length === 0) {
+            sampleContainer.textContent = '# No proxies loaded. Click "Fetch Proxies" to get started.';
+        } else {
+            sampleContainer.innerHTML = sample.map(item => escapeHtml(item)).join('<br>');
+        }
+    }
+}
+
+function updateTelemetry(data) {
+    const generatedAt = data && data.generatedAt ? new Date(data.generatedAt) : null;
+    if (generatedAt && !Number.isNaN(generatedAt.getTime())) {
+        setText('telemetry-generated', generatedAt.toLocaleTimeString());
+    } else {
+        setText('telemetry-generated', new Date().toLocaleTimeString());
+    }
 }
 
 function updateLog(elementId, lines) {
     const target = document.getElementById(elementId);
     if (!target) return;
-    
     target.innerHTML = '';
-    if (!lines || lines.length === 0) {
+    if (!Array.isArray(lines) || lines.length === 0) {
         target.textContent = 'No data available.';
         return;
     }
-    
-    lines.forEach(line => {
-        target.innerHTML += line + '<br>';
+    target.innerHTML = lines.map(line => escapeHtml(line) + '<br>').join('');
+}
+
+function setFabLoading(state) {
+    if (!refreshFab) return;
+    if (state) {
+        refreshFab.classList.add('is-loading');
+        refreshFab.setAttribute('aria-busy', 'true');
+        refreshFab.disabled = true;
+    } else {
+        refreshFab.classList.remove('is-loading');
+        refreshFab.removeAttribute('aria-busy');
+        refreshFab.disabled = false;
+    }
+}
+
+let currentState = dashboardState;
+
+function applyDashboardState(data) {
+    currentState = data;
+    updateMetrics(data);
+    updateInsights(data);
+    updateTelemetry(data);
+    const logs = data && data.logs ? data.logs : {};
+    updateLog('proxy-log', logs.proxy);
+    updateLog('rotation-log', logs.rotation);
+    setText('last-update', '⏱️ ' + new Date().toLocaleTimeString());
+}
+
+function refreshDashboard() {
+    setFabLoading(true);
+    fetch('index.php?stats=1', { cache: 'no-store' })
+        .then(resp => resp.json())
+        .then(data => {
+            applyDashboardState(data);
+        })
+        .catch(() => {
+            console.log('Dashboard refresh failed, will retry...');
+        })
+        .finally(() => {
+            setTimeout(() => setFabLoading(false), 200);
+        });
+}
+
+const prefersDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function setTheme(mode, persist) {
+    const normalized = mode === 'dark' ? 'dark' : 'light';
+    document.body.setAttribute('data-theme', normalized);
+    if (themeToggle) {
+        themeToggle.setAttribute('aria-pressed', normalized === 'dark' ? 'true' : 'false');
+    }
+    if (themeLabel) {
+        themeLabel.textContent = normalized === 'dark' ? 'Dark' : 'Light';
+    }
+    if (persist) {
+        try {
+            localStorage.setItem('legend-dashboard-theme', normalized);
+        } catch (err) {
+            // Safari private mode can throw
+        }
+    }
+}
+
+let storedTheme = null;
+try {
+    storedTheme = localStorage.getItem('legend-dashboard-theme');
+} catch (err) {
+    storedTheme = null;
+}
+
+if (prefersDark) {
+    const initialTheme = storedTheme || (prefersDark.matches ? 'dark' : 'light');
+    setTheme(initialTheme, false);
+    const handlePreferenceChange = function (event) {
+        let persistedTheme = null;
+        try {
+            persistedTheme = localStorage.getItem('legend-dashboard-theme');
+        } catch (err) {
+            persistedTheme = null;
+        }
+        if (!persistedTheme) {
+            setTheme(event.matches ? 'dark' : 'light', false);
+        }
+    };
+    if (typeof prefersDark.addEventListener === 'function') {
+        prefersDark.addEventListener('change', handlePreferenceChange);
+    } else if (typeof prefersDark.addListener === 'function') {
+        prefersDark.addListener(handlePreferenceChange);
+    }
+} else {
+    setTheme(storedTheme || 'light', false);
+}
+
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        setTheme(next, true);
     });
 }
 
-// Auto-refresh every 15 seconds
+applyDashboardState(currentState);
+
+if (refreshFab) {
+    refreshFab.addEventListener('click', () => {
+        refreshDashboard();
+    });
+}
+
 setInterval(refreshDashboard, 15000);
 
-// Initial update timestamp
 setInterval(() => {
-    document.getElementById('last-update').textContent = '⏱️ ' + new Date().toLocaleTimeString();
+    const lastUpdateEl = document.getElementById('last-update');
+    if (lastUpdateEl) {
+        lastUpdateEl.textContent = '⏱️ ' + new Date().toLocaleTimeString();
+    }
 }, 1000);
 
 console.log('%c🎯 Advanced Payment & Proxy Intelligence Hub', 'font-size: 20px; font-weight: bold; color: #6366f1;');
 console.log('%cPowered by @LEGEND_BL', 'font-size: 14px; color: #8b5cf6;');
-console.log('%cDashboard loaded successfully. Auto-refresh enabled.', 'color: #10b981;');
+console.log('%cDashboard ready. Use the bottom-right button for an instant refresh.', 'color: #0ea5e9;');
 </script>
 </body>
 </html>
