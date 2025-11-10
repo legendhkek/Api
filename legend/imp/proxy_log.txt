@@ -1,0 +1,117 @@
+[2025-10-18 11:37:19] Loaded 0 proxies from file
+[2025-10-18 11:37:19] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 11:37:21] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2036 ms: Couldn't connect to server
+[2025-10-18 11:37:26] ✗ Proxy health check failed: http://proxy1.example.com:8080 - HTTP 0 - Could not resolve proxy: proxy1.example.com
+[2025-10-18 11:37:29] ✗ Proxy health check failed: tor://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2047 ms: Couldn't connect to server
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: tor://127.0.0.1:9050
+[2025-10-18 11:37:29] ✗ Proxy health check failed: http://proxy1.example.com:8080 - HTTP 0 - Could not resolve proxy: proxy1.example.com
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: http://proxy1.example.com:8080
+[2025-10-18 11:37:29] ✗ Proxy health check failed: https://proxy2.example.com:443 - HTTP 0 - Could not resolve proxy: proxy2.example.com
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: https://proxy2.example.com:443
+[2025-10-18 11:37:30] ✗ Proxy health check failed: socks5://proxy3.example.com:1080 - HTTP 0 - Could not resolve host: proxy3.example.com
+[2025-10-18 11:37:30] ✗ Marked proxy as DEAD: socks5://proxy3.example.com:1080
+[2025-10-18 11:37:30] ✗ Proxy health check failed: socks4://proxy4.example.com:1080 - HTTP 0 - Could not resolve host: proxy4.example.com
+[2025-10-18 11:37:30] ✗ Marked proxy as DEAD: socks4://proxy4.example.com:1080
+[2025-10-18 11:37:30] ERROR: All proxies are dead or unavailable
+[2025-10-18 11:37:30] ERROR: No available proxy for retry attempt 1
+[2025-10-18 11:37:30] Reset 5 dead proxies - all proxies re-enabled
+[2025-10-18 11:37:32] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2036 ms: Couldn't connect to server
+[2025-10-18 11:37:32] ✗ Marked proxy as DEAD: socks5://127.0.0.1:9050
+[2025-10-18 11:37:33] ✗ Proxy health check failed: http://my-proxy.com:8080 - HTTP 403 - 
+[2025-10-18 11:37:33] ✗ Marked proxy as DEAD: http://my-proxy.com:8080
+[2025-10-18 11:37:33] ERROR: All proxies are dead or unavailable
+[2025-10-18 11:56:39] Loaded 1 proxies from file
+[2025-10-18 11:56:39] ERROR: Invalid proxy format: http://dead-proxy-test.invalid:9999
+[2025-10-18 11:56:39] ERROR: No proxies available
+[2025-10-18 11:56:39] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 11:56:41] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2042 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 14:05:41] Loaded 20 proxies from file
+[2025-10-18 14:05:41] ERROR: Invalid proxy format: http://dead-proxy-test.invalid:9999
+[2025-10-18 14:05:41] ERROR: No proxies available
+[2025-10-18 14:05:41] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 14:05:43] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2035 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 14:46:16] Loaded 35 proxies from file
+[2025-10-18 14:46:16] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 14:46:18] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2032 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 15:17:40] Loaded 35 proxies from file
+[2025-10-18 15:17:40] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 15:17:42] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2017 ms: Couldn't connect to server (Code: 7)
+[2025-10-19 10:06:38] Loaded 5 proxies from file
+[2025-10-19 10:25:48] Loaded 5 proxies from file
+[2025-10-19 10:26:19] Loaded 5 proxies from file
+[2025-10-19 10:30:29] Loaded 5 proxies from file
+[2025-10-19 10:32:03] Loaded 5 proxies from file
+[2025-10-19 10:32:32] Loaded 5 proxies from file
+[2025-10-19 10:39:17] Loaded 5 proxies from file
+[2025-10-19 10:40:37] Loaded 5 proxies from file
+[2025-10-19 10:40:51] Loaded 5 proxies from file
+[2025-10-19 10:41:08] Loaded 5 proxies from file
+[2025-10-19 10:42:40] Loaded 5 proxies from file
+[2025-10-19 10:42:58] Loaded 5 proxies from file
+[2025-10-19 10:48:23] Loaded 5 proxies from file
+[2025-10-19 10:48:40] Loaded 5 proxies from file
+[2025-10-19 10:51:59] Loaded 5 proxies from file
+[2025-10-19 11:16:46] Loaded 5 proxies from file
+[2025-10-19 11:26:08] Loaded 5 proxies from file
+[2025-10-19 11:28:02] Loaded 5 proxies from file
+[2025-10-19 11:31:21] Loaded 5 proxies from file
+[2025-10-19 11:33:53] Loaded 5 proxies from file
+[2025-10-19 11:34:05] Loaded 5 proxies from file
+[2025-10-19 11:34:25] Loaded 5 proxies from file
+[2025-10-19 11:37:58] Loaded 5 proxies from file
+[2025-10-19 11:38:57] Loaded 5 proxies from file
+[2025-10-19 11:39:05] Loaded 5 proxies from file
+[2025-10-19 11:39:24] Loaded 5 proxies from file
+[2025-10-19 11:47:31] Loaded 5 proxies from file
+[2025-10-19 11:48:27] Loaded 5 proxies from file
+[2025-10-19 11:48:49] Loaded 5 proxies from file
+[2025-10-19 11:49:04] Loaded 5 proxies from file
+[2025-10-19 11:49:40] Loaded 5 proxies from file
+[2025-10-19 11:50:08] Loaded 5 proxies from file
+[2025-10-19 11:51:22] Loaded 5 proxies from file
+[2025-10-19 11:54:23] Loaded 5 proxies from file
+[2025-10-19 11:55:34] Loaded 5 proxies from file
+[2025-10-19 11:56:30] Loaded 5 proxies from file
+[2025-10-19 12:03:40] Loaded 5 proxies from file
+[2025-10-19 12:04:38] Loaded 5 proxies from file
+[2025-10-19 12:05:56] Loaded 5 proxies from file
+[2025-10-19 12:06:14] Loaded 5 proxies from file
+[2025-10-19 12:06:25] Loaded 5 proxies from file
+[2025-10-19 12:07:13] Loaded 5 proxies from file
+[2025-10-19 12:08:09] Loaded 5 proxies from file
+[2025-10-19 12:24:09] Loaded 5 proxies from file
+[2025-10-19 12:39:28] Loaded 30 proxies from file
+[2025-10-19 12:40:48] Loaded 30 proxies from file
+[2025-10-19 12:41:29] Loaded 30 proxies from file
+[2025-10-19 12:57:21] Loaded 36 proxies from file
+[2025-10-19 12:57:58] Loaded 36 proxies from file
+[2025-10-19 13:00:25] Loaded 36 proxies from file
+[2025-10-19 13:05:03] Loaded 36 proxies from file
+[2025-10-19 13:06:04] Loaded 36 proxies from file
+[2025-10-19 13:07:44] Loaded 36 proxies from file
+[2025-10-19 13:21:33] Loaded 36 proxies from file
+[2025-10-19 13:41:52] Loaded 37 proxies from file
+[2025-10-19 13:42:04] Loaded 38 proxies from file
+[2025-10-19 13:48:53] Loaded 38 proxies from file
+[2025-10-21 07:01:47] Loaded 38 proxies from file
+[2025-10-21 07:02:32] Loaded 39 proxies from file
+[2025-10-21 07:02:41] Loaded 39 proxies from file
+[2025-10-21 07:03:08] Loaded 39 proxies from file
+[2025-10-21 07:04:38] Loaded 39 proxies from file
+[2025-10-21 07:04:46] Loaded 39 proxies from file
+[2025-10-21 07:20:44] Loaded 39 proxies from file
+[2025-10-21 07:21:09] Loaded 40 proxies from file
+[2025-10-21 07:23:28] Loaded 40 proxies from file
+[2025-10-21 07:35:57] Loaded 50 proxies from file
+[2025-10-21 07:37:00] Loaded 50 proxies from file
+[2025-10-21 07:37:56] Loaded 50 proxies from file
+[2025-10-21 07:40:08] Loaded 55 proxies from file
+[2025-10-21 07:41:05] Loaded 56 proxies from file
+[2025-10-21 07:41:37] Loaded 57 proxies from file
+[2025-10-21 07:41:45] Loaded 57 proxies from file
+[2025-10-21 07:43:27] Loaded 57 proxies from file
+[2025-10-21 07:43:42] Loaded 57 proxies from file
+[2025-10-21 07:45:09] Loaded 57 proxies from file
+[2025-10-21 07:46:27] Loaded 57 proxies from file
+[2025-10-21 07:48:26] Loaded 57 proxies from file
+[2025-10-21 07:49:25] Loaded 57 proxies from file
