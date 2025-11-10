@@ -226,12 +226,88 @@ echo "<!DOCTYPE html>
         .type-https{background:#009688}
         .type-socks4{background:#8e44ad}
         .type-socks5{background:#e67e22}
+        .speed-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+        .speed-fast { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+        .speed-medium { background: #ff9800; box-shadow: 0 0 6px #ff9800; }
+        .speed-slow { background: #f44336; box-shadow: 0 0 6px #f44336; }
+        .filter-controls {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-controls label {
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+        }
+        .filter-controls select, .filter-controls input {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .time-stats {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        .time-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .export-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .btn-success {
+            background: #4caf50;
+        }
+        .btn-success:hover {
+            background: #45a049;
+        }
+        .btn-danger {
+            background: #f44336;
+        }
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+        .proxy-item:hover {
+            transform: translateX(5px);
+            transition: transform 0.2s ease;
+        }
+        .copy-btn {
+            background: #2196f3;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .copy-btn:hover {
+            background: #1976d2;
+        }
     </style>
 </head>
 <body>
 <div class='container'>
-    <h1>🔍 Proxy Fetcher & Tester</h1>
-    <p class='subtitle'>Automatically scrape, test, and save working proxies from multiple sources</p>
+    <h1>🔍 Advanced Proxy Fetcher & Tester</h1>
+    <p class='subtitle'>Automatically scrape, test, and save working proxies from multiple sources | Real-time validation & performance metrics</p>
     
     <div class='stats'>
         <div class='stat-box'>
@@ -250,6 +326,14 @@ echo "<!DOCTYPE html>
             <div class='stat-label'>Success Rate</div>
             <div class='stat-value' id='successRate'>0%</div>
         </div>
+        <div class='stat-box'>
+            <div class='stat-label'>Avg Speed</div>
+            <div class='stat-value' id='avgSpeed'>-</div>
+        </div>
+        <div class='stat-box'>
+            <div class='stat-label'>Elapsed Time</div>
+            <div class='stat-value' id='elapsedTime'>0s</div>
+        </div>
     </div>
     
     <div class='progress-section'>
@@ -260,10 +344,27 @@ echo "<!DOCTYPE html>
         <div id='currentAction' style='color: #666; margin-top: 10px; font-size: 13px;'>Initializing...</div>
     </div>
 
+    <div class='filter-controls'>
+        <label>Filter by Type:</label>
+        <select id='filterType' onchange='filterProxies()'>
+            <option value='all'>All Types</option>
+            <option value='http'>HTTP</option>
+            <option value='https'>HTTPS</option>
+            <option value='socks4'>SOCKS4</option>
+            <option value='socks5'>SOCKS5</option>
+        </select>
+        <label>Search:</label>
+        <input type='text' id='searchInput' placeholder='Search proxy...' onkeyup='filterProxies()' style='flex: 1; min-width: 200px;'>
+        <button class='btn btn-secondary' onclick='clearFilters()'>Clear Filters</button>
+    </div>
+    
     <h3 class='section-title'>⚡ Live Working Proxies <span style='font-size:12px;margin-left:8px;opacity:.7;'>(<span id='liveCount'>0</span>)</span></h3>
-    <div id='liveWorkingContainer' style='background:#f5f5f5; padding: 15px; border-radius: 10px; max-height: 260px; overflow-y: auto;'></div>
-    <div class='button-group'>
-        <a id='liveDownload' class='btn btn-secondary' href='#' download='ProxyList.txt'>📥 Download current list</a>
+    <div id='liveWorkingContainer' style='background:#f5f5f5; padding: 15px; border-radius: 10px; max-height: 400px; overflow-y: auto;'></div>
+    <div class='export-options'>
+        <a id='liveDownload' class='btn btn-success' href='#' download='ProxyList.txt'>📥 Download ProxyList.txt</a>
+        <button class='btn btn-secondary' onclick='copyAllProxies()'>📋 Copy All to Clipboard</button>
+        <button class='btn btn-secondary' onclick='exportJSON()'>📊 Export as JSON</button>
+        <a href='ProxyList.txt' class='btn btn-secondary' target='_blank'>🔍 View Raw File</a>
     </div>
     
     <h3 class='section-title'>📋 Live Log</h3>
@@ -271,7 +372,18 @@ echo "<!DOCTYPE html>
 ";
 echo "<script>
     window.liveProxies = [];
+    window.liveProxiesData = [];
     window.liveBlobUrl = null;
+    window.startTime = Date.now();
+    
+    function updateElapsedTime() {
+        var elapsed = Math.floor((Date.now() - window.startTime) / 1000);
+        var minutes = Math.floor(elapsed / 60);
+        var seconds = elapsed % 60;
+        document.getElementById('elapsedTime').textContent = minutes > 0 ? minutes + 'm ' + seconds + 's' : seconds + 's';
+    }
+    setInterval(updateElapsedTime, 1000);
+    
     function updateLiveDownload(){
         try{
             if(window.liveBlobUrl){ URL.revokeObjectURL(window.liveBlobUrl); }
@@ -281,25 +393,104 @@ echo "<script>
             var a = document.getElementById('liveDownload');
             a.href = window.liveBlobUrl;
             a.download = 'ProxyList.txt';
-            a.textContent = '📥 Download current list ('+window.liveProxies.length+')';
+            a.textContent = '📥 Download ProxyList.txt ('+window.liveProxies.length+')';
         }catch(e){}
     }
-    function addWorkingProxy(proxy, type, city, country){
+    
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            alert('Copied to clipboard!');
+        }).catch(function() {
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('Copied to clipboard!');
+        });
+    }
+    
+    function copyAllProxies() {
+        if(window.liveProxies.length === 0) {
+            alert('No proxies to copy!');
+            return;
+        }
+        copyToClipboard(window.liveProxies.join('\\n'));
+    }
+    
+    function exportJSON() {
+        if(window.liveProxiesData.length === 0) {
+            alert('No proxy data to export!');
+            return;
+        }
+        var json = JSON.stringify(window.liveProxiesData, null, 2);
+        var blob = new Blob([json], {type: 'application/json'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'proxies.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function filterProxies() {
+        var filterType = document.getElementById('filterType').value;
+        var searchText = document.getElementById('searchInput').value.toLowerCase();
+        var items = document.querySelectorAll('#liveWorkingContainer .proxy-item');
+        var visible = 0;
+        items.forEach(function(item) {
+            var proxyText = item.textContent.toLowerCase();
+            var typeMatch = filterType === 'all' || proxyText.includes(filterType);
+            var searchMatch = searchText === '' || proxyText.includes(searchText);
+            if(typeMatch && searchMatch) {
+                item.style.display = 'flex';
+                visible++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+    
+    function clearFilters() {
+        document.getElementById('filterType').value = 'all';
+        document.getElementById('searchInput').value = '';
+        filterProxies();
+    }
+    
+    function addWorkingProxy(proxy, type, city, country, speed){
         try{
             window.liveProxies.push(proxy);
+            var proxyData = {
+                proxy: proxy,
+                type: type || 'http',
+                city: city || 'unknown',
+                country: country || 'unknown',
+                speed: speed || 'unknown'
+            };
+            window.liveProxiesData.push(proxyData);
+            
             var container = document.getElementById('liveWorkingContainer');
             var badgeClass = 'type-'+String(type||'http').toLowerCase();
             var label = String(type||'').toUpperCase();
             var div = document.createElement('div');
             div.className = 'proxy-item';
+            div.setAttribute('data-type', (type||'http').toLowerCase());
+            div.setAttribute('data-proxy', proxy.toLowerCase());
+            
+            var speedClass = 'speed-medium';
+            if(speed && speed < 1) speedClass = 'speed-fast';
+            else if(speed && speed > 3) speedClass = 'speed-slow';
+            
             var safeProxy = proxy;
             var safeCity = city||''; var safeCountry = country||'';
-            div.innerHTML = '<span>'+safeProxy+' <span class=\"badge '+badgeClass+'\">['+label+']</span></span>'+
-                            '<span class=\"proxy-details\">'+safeCity+', '+safeCountry+'</span>';
+            var speedHtml = speed ? '<span class=\"speed-indicator '+speedClass+'\" title=\"'+speed+'s\"></span>' : '';
+            div.innerHTML = '<span>'+safeProxy+' <span class=\"badge '+badgeClass+'\">['+label+']</span>'+speedHtml+'</span>'+
+                            '<span class=\"proxy-details\">'+safeCity+', '+safeCountry+' <button class=\"copy-btn\" onclick=\"copyToClipboard(\\''+safeProxy.replace(/'/g, \"\\\\'\")+'\\')\">Copy</button></span>';
             container.appendChild(div);
             document.getElementById('liveCount').textContent = window.liveProxies.length;
             updateLiveDownload();
-        }catch(e){}
+        }catch(e){console.error(e);}
     }
 </script>";
 flush();
@@ -346,20 +537,62 @@ function updateStats($scraped, $tested, $working) {
 }
 
 /**
- * Append a working proxy to ProxyList.txt in real time (deduped, locked)
+ * Validate proxy format before saving
+ */
+function validateProxyFormat(string $proxy): bool {
+    $p = trim($proxy);
+    if ($p === '') return false;
+    
+    // Must have valid format: scheme://ip:port or ip:port
+    $hasScheme = preg_match('/^(https?|socks4|socks5):\/\//i', $p);
+    $addr = $hasScheme ? preg_replace('/^(https?|socks4|socks5):\/\//i', '', $p) : $p;
+    
+    // Extract IP/host and port
+    if (preg_match('/^([^:]+):(\d+)(?::([^:]+):(.+))?$/', $addr, $matches)) {
+        $host = $matches[1];
+        $port = (int)$matches[2];
+        
+        // Validate port range
+        if ($port < 1 || $port > 65535) return false;
+        
+        // Validate IP or hostname
+        if (filter_var($host, FILTER_VALIDATE_IP) || 
+            preg_match('/^[a-z0-9]+([-.]?[a-z0-9]+)*\.[a-z]{2,}$/i', $host)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Append a working proxy to ProxyList.txt in real time (deduped, locked, validated)
+ * Only saves proxies that pass validation
  */
 function saveWorkingProxyRealtime(string $proxy, string $file = 'ProxyList.txt'): void {
     static $seen = null;
     $p = trim(strtolower($proxy));
     if ($p === '') return;
+    
+    // Validate proxy format before saving
+    if (!validateProxyFormat($proxy)) {
+        return; // Skip invalid proxies
+    }
+    
     if ($seen === null) {
         $seen = [];
         if (file_exists($file)) {
             $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-            foreach ($lines as $l) { $seen[trim(strtolower($l))] = true; }
+            foreach ($lines as $l) {
+                $line = trim(strtolower($l));
+                if ($line && $line[0] !== '#') {
+                    $seen[$line] = true;
+                }
+            }
         }
     }
-    if (isset($seen[$p])) return;
+    if (isset($seen[$p])) return; // Already exists
+    
     $fp = @fopen($file, 'a');
     if ($fp) {
         if (@flock($fp, LOCK_EX)) {
@@ -837,9 +1070,10 @@ function scrapeFromProxyScrape(array $wantProtocols): array {
 }
 
 /**
- * Test if proxy is working
+ * Test if proxy is working (with speed measurement)
  */
 function testProxy($proxyString, $timeout = 5) {
+    $startTime = microtime(true);
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => 'http://ip-api.com/json', // Use HTTP not HTTPS
@@ -870,6 +1104,7 @@ function testProxy($proxyString, $timeout = 5) {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
+    $totalTime = round(microtime(true) - $startTime, 2);
     curl_close($ch);
     
     if ($response !== false && $httpCode == 200) {
@@ -878,11 +1113,12 @@ function testProxy($proxyString, $timeout = 5) {
             'working' => true,
             'ip' => $data['query'] ?? 'unknown',
             'country' => $data['country'] ?? 'unknown',
-            'city' => $data['city'] ?? 'unknown'
+            'city' => $data['city'] ?? 'unknown',
+            'speed' => $totalTime
         ];
     }
     
-    return ['working' => false, 'error' => $error];
+    return ['working' => false, 'error' => $error, 'speed' => $totalTime];
 }
 
 /**
@@ -937,6 +1173,7 @@ function testProxiesInParallel(array $proxies, int $timeout = 3, int $concurrenc
                 'handle' => $ch,
                 'proxy' => $proxy,
                 'type' => $type,
+                'startTime' => microtime(true),
             ];
             curl_multi_add_handle($mh, $ch);
         }
@@ -963,6 +1200,7 @@ function testProxiesInParallel(array $proxies, int $timeout = 3, int $concurrenc
             $response = curl_multi_getcontent($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $err = curl_error($ch);
+            $totalTime = round(microtime(true) - $entry['startTime'], 2);
             
             if ($response !== false && $httpCode == 200) {
                 $data = json_decode($response, true);
@@ -976,14 +1214,15 @@ function testProxiesInParallel(array $proxies, int $timeout = 3, int $concurrenc
                     'type' => strtolower($ptype),
                     'city' => $city,
                     'country' => $country,
+                    'speed' => $totalTime
                 ];
-                // Real-time persistence to ProxyList.txt
+                // Real-time persistence to ProxyList.txt (only working proxies)
                 saveWorkingProxyRealtime($normalized, 'ProxyList.txt');
-                logMessage("✓ WORKING: $normalized | $city, $country | type: " . strtoupper($ptype), 'success');
+                logMessage("✓ WORKING: $normalized | $city, $country | type: " . strtoupper($ptype) . " | speed: {$totalTime}s", 'success');
                 
                 // Emit to live viewer (HTML mode only)
                 if (!isset($GLOBALS['apiMode']) || $GLOBALS['apiMode'] === false) {
-                    echo "<script>addWorkingProxy(".json_encode($normalized).",".json_encode(strtoupper($ptype)).",".json_encode($city).",".json_encode($country).");</script>";
+                    echo "<script>addWorkingProxy(".json_encode($normalized).",".json_encode(strtoupper($ptype)).",".json_encode($city).",".json_encode($country).",".json_encode($totalTime).");</script>";
                     if (ob_get_level() > 0) ob_flush();
                     flush();
                 }
@@ -1119,10 +1358,21 @@ if (!empty($existingProxies)) {
     $workingProxies = array_values($allWorkingProxies);
 }
 
-// Save final merged list
+// Save final merged list (validate all proxies before saving)
 if (!empty($workingProxies)) {
-    file_put_contents('ProxyList.txt', implode("\n", $workingProxies) . "\n", LOCK_EX);
-    logMessage("💾 Saved " . count($workingProxies) . " total working proxies to ProxyList.txt", 'success');
+    $validatedProxies = [];
+    foreach ($workingProxies as $proxy) {
+        if (validateProxyFormat($proxy)) {
+            $validatedProxies[] = strtolower(trim($proxy));
+        }
+    }
+    $validatedProxies = array_unique($validatedProxies);
+    if (!empty($validatedProxies)) {
+        file_put_contents('ProxyList.txt', implode("\n", $validatedProxies) . "\n", LOCK_EX);
+        logMessage("💾 Saved " . count($validatedProxies) . " validated working proxies to ProxyList.txt", 'success');
+    } else {
+        logMessage("⚠️ No valid proxies to save after validation", 'warning');
+    }
 }
 
 logMessage("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", 'info');

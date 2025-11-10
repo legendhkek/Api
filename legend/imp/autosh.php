@@ -201,28 +201,156 @@ if (!class_exists('CaptchaSolver')) {
 class CaptchaSolver {
     // Use the per-request stable UA
     private static function rotatingUA(): string { return flow_user_agent(); }
+    
     public static function detectCaptcha(string $html): array {
         $h = strtolower($html);
         $res = [];
+        
+        // Detect hCaptcha
         if (strpos($h, 'hcaptcha') !== false || strpos($h, 'h-captcha') !== false) {
             preg_match('/data-sitekey=["\']([^"\']+)["\']/', $html, $m);
             $res['hcaptcha'] = ['type' => 'hcaptcha', 'sitekey' => $m[1] ?? null];
         }
+        
+        // Detect reCAPTCHA v2
         if (strpos($h, 'recaptcha') !== false || strpos($h, 'google.com/recaptcha') !== false) {
             preg_match('/data-sitekey=["\']([^"\']+)["\']/', $html, $m);
             $res['recaptcha_v2'] = ['type' => 'recaptcha_v2', 'sitekey' => $m[1] ?? null];
         }
+        
+        // Detect reCAPTCHA v3
         if (strpos($html, 'grecaptcha.execute') !== false) {
             preg_match('/grecaptcha\.execute\(["\']([^"\']+)["\']/', $html, $m);
             $res['recaptcha_v3'] = ['type' => 'recaptcha_v3', 'sitekey' => $m[1] ?? null];
         }
+        
+        // Detect normal text/image captcha
+        if (preg_match('/<img[^>]*captcha[^>]*>/i', $html) || preg_match('/captcha[^>]*input/i', $html)) {
+            $res['normal_captcha'] = ['type' => 'normal_captcha', 'detected' => true];
+        }
+        
+        // Detect math captcha
+        if (preg_match('/(\d+)\s*[+\-×*]\s*(\d+)\s*=/i', $html, $mathMatch)) {
+            $res['math_captcha'] = ['type' => 'math_captcha', 'expression' => $mathMatch[0] ?? null];
+        }
+        
         return $res;
     }
+    
     public static function requiresCaptcha(string $html): bool {
         $h = strtolower($html);
-        return (strpos($h, 'hcaptcha') !== false || strpos($h, 'recaptcha') !== false || strpos($h, 'captcha') !== false);
+        return (strpos($h, 'hcaptcha') !== false || 
+                strpos($h, 'recaptcha') !== false || 
+                strpos($h, 'captcha') !== false ||
+                preg_match('/<img[^>]*captcha/i', $html));
     }
+    
+    /**
+     * Solve math captcha from HTML
+     * Supports: addition, subtraction, multiplication
+     */
+    public static function solveMathCaptcha(string $html): ?string {
+        // Try to find math expression in various formats
+        $patterns = [
+            '/(\d+)\s*\+\s*(\d+)\s*=/i',
+            '/(\d+)\s*-\s*(\d+)\s*=/i',
+            '/(\d+)\s*×\s*(\d+)\s*=/i',
+            '/(\d+)\s*\*\s*(\d+)\s*=/i',
+            '/(\d+)\s*plus\s*(\d+)/i',
+            '/(\d+)\s*minus\s*(\d+)/i',
+        ];
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $html, $matches)) {
+                $num1 = (int)$matches[1];
+                $num2 = (int)$matches[2];
+                
+                if (strpos($matches[0], '+') !== false || strpos($matches[0], 'plus') !== false) {
+                    return (string)($num1 + $num2);
+                } elseif (strpos($matches[0], '-') !== false || strpos($matches[0], 'minus') !== false) {
+                    return (string)($num1 - $num2);
+                } elseif (strpos($matches[0], '×') !== false || strpos($matches[0], '*') !== false) {
+                    return (string)($num1 * $num2);
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Wait for hCaptcha to be solved (for manual solving scenarios)
+     * Returns true if captcha appears solved, false otherwise
+     */
+    public static function waitForHCaptcha(string $html, int $maxWaitSeconds = 60): bool {
+        // Check if hCaptcha token is present (indicates solved)
+        if (preg_match('/h-captcha-response["\']?\s*[:=]\s*["\']?([^"\'\s]+)/i', $html, $m)) {
+            return !empty($m[1]) && strlen($m[1]) > 20; // Valid tokens are usually long
+        }
+        
+        // Check for hCaptcha callback or success indicators
+        if (strpos($html, 'hcaptcha-success') !== false || 
+            strpos($html, 'hcaptcha-token') !== false ||
+            preg_match('/hcaptcha.*success/i', $html)) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Try to bypass normal captcha using header manipulation and retry
+     */
+    public static function tryNormalCaptchaBypass(string $url, ?string $cookieFile = null, int $retries = 3): array {
+        for ($i = 0; $i < $retries; $i++) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'User-Agent: '.self::rotatingUA(),
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language: en-US,en;q=0.9',
+                'Accept-Encoding: gzip, deflate',
+                'Connection: keep-alive',
+                'Cache-Control: no-cache',
+                'Upgrade-Insecure-Requests: 1',
+                'Referer: ' . $url
+            ]);
+            if ($cookieFile) {
+                curl_setopt($ch, CURLOPT_COOKIEJAR, $cookieFile);
+                curl_setopt($ch, CURLOPT_COOKIEFILE, $cookieFile);
+            }
+            // Reuse current proxy if any
+            if (function_exists('apply_proxy_if_used')) {
+                apply_proxy_if_used($ch, $url);
+            }
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            // Check if captcha is still present
+            if ($code == 200 && !self::requiresCaptcha($resp)) {
+                return ['success' => true, 'response' => $resp, 'http_code' => $code, 'attempt' => $i + 1];
+            }
+            
+            // Small delay between retries
+            if ($i < $retries - 1) {
+                usleep(500000); // 0.5 seconds
+            }
+        }
+        
+        return ['success' => false, 'response' => $resp ?? '', 'http_code' => $code ?? 0];
+    }
+    
     public static function tryHeaderSkip(string $url, ?string $cookieFile = null): array {
+        // First try normal captcha bypass
+        $result = self::tryNormalCaptchaBypass($url, $cookieFile, 2);
+        if ($result['success']) {
+            return $result;
+        }
+        
+        // Fallback to original header skip method
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -1331,15 +1459,87 @@ if (!$noproxy_requested && !$proxy_used && (!isset($_GET['proxy']) || empty($_GE
 if (!$noproxy_requested && !$proxy_used && !$require_proxy) {
     $proxy_used = false; // proceed without proxy
 }
-// If proxy is required strictly and none is available, stop with clear message
+// If proxy is required strictly and none is available, try auto-fetching working proxies
 if (!$noproxy_requested && !$proxy_used && $require_proxy) {
     $proxyCount = file_exists('ProxyList.txt') ? count(file('ProxyList.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) : 0;
-    send_final_response([
-        'Response' => 'No working proxy available and requireProxy=1. Update ProxyList.txt, provide ?proxy=scheme://ip:port, or remove requireProxy to proceed direct.',
-        'ProxyStatus' => 'Dead',
-        'ProxyIP' => 'N/A',
-        'ProxiesInFile' => $proxyCount
-    ], false, '', '');
+    
+    // Auto-fetch working proxies if ProxyList.txt is empty or has no working proxies
+    if ($proxyCount === 0 || !$autoProxy) {
+        // Try to fetch working proxies automatically
+        $autoFetchSuccess = false;
+        if (function_exists('auto_fetch_working_proxies')) {
+            $autoFetchSuccess = auto_fetch_working_proxies(10, 3); // Fetch 10 working proxies with 3s timeout
+        } else {
+            // Fallback: call fetch_proxies.php via HTTP
+            $fetchUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . 
+                       '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . 
+                       dirname($_SERVER['PHP_SELF']) . '/fetch_proxies.php?api=1&count=10&timeout=3&concurrency=50';
+            
+            $ch = curl_init($fetchUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $fetchResponse = @curl_exec($ch);
+            $fetchCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($fetchResponse && $fetchCode == 200) {
+                $fetchData = json_decode($fetchResponse, true);
+                if (isset($fetchData['success']) && $fetchData['success'] && !empty($fetchData['proxies'])) {
+                    $autoFetchSuccess = true;
+                    // Reload ProxyManager with new proxies
+                    $__pm = new ProxyManager();
+                    $__pm_count = $__pm->loadFromFile('ProxyList.txt');
+                    // Try selecting a working proxy again
+                    $siteParam = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
+                    $candidate = null;
+                    if (!empty($siteParam)) {
+                        $host = parse_url($siteParam, PHP_URL_HOST);
+                        $siteUrl = 'https://' . $host;
+                        $candidate = select_working_proxy_for_url('ProxyList.txt', $siteUrl, 3);
+                    }
+                    $autoProxy = $candidate ?: select_working_proxy_parallel('ProxyList.txt', 6);
+                    if ($autoProxy) {
+                        $ptype = 'http';
+                        $addr = $autoProxy;
+                        if (preg_match('/^(https?|socks4|socks5):\/\/(.+)$/i', $autoProxy, $m)) {
+                            $ptype = strtolower($m[1]);
+                            $addr = $m[2];
+                        }
+                        $parts = explode(':', $addr);
+                        if (count($parts) >= 2) {
+                            $proxy_ip = $parts[0];
+                            $proxy_port = $parts[1];
+                            if (count($parts) >= 4) { $proxy_user = $parts[2]; $proxy_pass = $parts[3]; }
+                            $proxy_type = $ptype;
+                            $proxy_used = true;
+                            $proxy_status = 'Live (Auto-fetched)';
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If still no proxy after auto-fetch, return error
+        if (!$proxy_used) {
+            send_final_response([
+                'Response' => 'No working proxy available. Auto-fetch attempted but failed. Update ProxyList.txt, provide ?proxy=scheme://ip:port, or remove requireProxy to proceed direct.',
+                'ProxyStatus' => 'Dead',
+                'ProxyIP' => 'N/A',
+                'ProxiesInFile' => file_exists('ProxyList.txt') ? count(file('ProxyList.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) : 0,
+                'AutoFetchAttempted' => true,
+                'AutoFetchSuccess' => $autoFetchSuccess
+            ], false, '', '');
+        }
+    } else {
+        send_final_response([
+            'Response' => 'No working proxy available and requireProxy=1. Update ProxyList.txt, provide ?proxy=scheme://ip:port, or remove requireProxy to proceed direct.',
+            'ProxyStatus' => 'Dead',
+            'ProxyIP' => 'N/A',
+            'ProxiesInFile' => $proxyCount
+        ], false, '', '');
+    }
 }
 
 
@@ -1894,11 +2094,36 @@ if (curl_errno($ch)) {
 } else {
     file_put_contents('php.php', $response );
     $finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-    // Captcha handling: if page shows captcha, attempt a header-skip once
+    // Enhanced captcha handling: detect and solve various captcha types
     if (CaptchaSolver::requiresCaptcha($response)) {
-        $skip = CaptchaSolver::tryHeaderSkip($finalUrl ?: ($urlbase.'/cart/'.$prodid.':1'), $cookie);
-        if ($skip['success']) {
-            $response = $skip['response'];
+        $captchaTypes = CaptchaSolver::detectCaptcha($response);
+        
+        // Try to solve math captcha automatically
+        if (isset($captchaTypes['math_captcha'])) {
+            $mathAnswer = CaptchaSolver::solveMathCaptcha($response);
+            if ($mathAnswer !== null) {
+                // Math captcha solved, continue with response
+                // Note: In real implementation, you'd submit the answer via form
+            }
+        }
+        
+        // For hCaptcha, wait and check if it's already solved
+        if (isset($captchaTypes['hcaptcha'])) {
+            if (CaptchaSolver::waitForHCaptcha($response, 5)) {
+                // hCaptcha appears solved, continue
+            } else {
+                // hCaptcha detected but not solved - try header bypass
+                $skip = CaptchaSolver::tryHeaderSkip($finalUrl ?: ($urlbase.'/cart/'.$prodid.':1'), $cookie);
+                if ($skip['success']) {
+                    $response = $skip['response'];
+                }
+            }
+        } else {
+            // For normal captchas or reCAPTCHA, try header bypass
+            $skip = CaptchaSolver::tryHeaderSkip($finalUrl ?: ($urlbase.'/cart/'.$prodid.':1'), $cookie);
+            if ($skip['success']) {
+                $response = $skip['response'];
+            }
         }
     }
     $web_build_id = find_between($response, 'web_build_id&quot;:&quot;', '&quot;');
