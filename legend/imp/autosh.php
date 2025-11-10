@@ -1633,6 +1633,135 @@ if (!$noproxy_requested && !$proxy_used && $require_proxy) {
 }
 
 
+// Show HTML form if parameters are missing (but not when imported by hit.php)
+if ((!isset($_GET['cc']) || empty($_GET['cc']) || !isset($_GET['site']) || empty($_GET['site'])) && !isset($_GET['_hit_import'])) {
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🚀 AutoSh - Advanced Shopify CC Checker</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .container {
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 600px;
+                width: 100%;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }
+            h1 {
+                color: #4338ca;
+                font-size: 32px;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .subtitle { color: #64748b; margin-bottom: 30px; line-height: 1.6; }
+            .form-group { margin-bottom: 20px; }
+            label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: #334155;
+            }
+            input, textarea {
+                width: 100%;
+                padding: 12px 16px;
+                border: 2px solid #e2e8f0;
+                border-radius: 10px;
+                font-size: 14px;
+                transition: border-color 0.3s;
+                font-family: 'Courier New', monospace;
+            }
+            input:focus, textarea:focus {
+                outline: none;
+                border-color: #6366f1;
+            }
+            textarea { min-height: 80px; resize: vertical; }
+            .btn {
+                background: linear-gradient(135deg, #6366f1, #4338ca);
+                color: white;
+                padding: 14px 28px;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                width: 100%;
+                transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
+            .help-text { font-size: 12px; color: #64748b; margin-top: 5px; }
+            .features {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                margin: 20px 0;
+            }
+            .feature {
+                background: #f8fafc;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 13px;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1><span>🚀</span> AutoSh</h1>
+            <p class="subtitle">
+                Advanced Shopify CC Checker with full payment flow integration.
+                Real gateway testing with proxy rotation and analytics.
+            </p>
+            
+            <div class="features">
+                <div class="feature">✅ Full Shopify Flow</div>
+                <div class="feature">🔄 <?= $__pm_count ?> Proxies</div>
+                <div class="feature">⚡ Rate Limiting</div>
+                <div class="feature">📊 Analytics</div>
+            </div>
+            
+            <form method="GET" action="">
+                <div class="form-group">
+                    <label>💳 Credit Card</label>
+                    <input type="text" name="cc" placeholder="4111111111111111|12|2027|123" required>
+                    <div class="help-text">Format: number|month|year|cvv</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>🌐 Shopify Site URL</label>
+                    <input type="text" name="site" placeholder="https://example.myshopify.com" required>
+                    <div class="help-text">Enter the Shopify store URL</div>
+                </div>
+                
+                <button type="submit" class="btn">⚡ Check Card</button>
+            </form>
+            
+            <div style="margin-top: 20px; padding: 15px; background: #eff6ff; border-radius: 10px; font-size: 13px; color: #1e40af;">
+                <strong>ℹ️ API Usage:</strong><br>
+                GET ?cc=4111111111111111|12|2027|123&site=https://example.myshopify.com
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
 // Validate CC parameter
 if (!isset($_GET['cc']) || empty($_GET['cc'])) {
     send_final_response(['Response' => 'CC parameter is required'], false, '', '');

