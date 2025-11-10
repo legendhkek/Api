@@ -182,17 +182,13 @@ function apply_common_timeouts($ch): void {
 
 function extractOperationQueryFromFile(string $filename, string $operationName): ?string {
     $filepath = __DIR__ . '/' . $filename;
-    if (!file_exists($filepath)) {
-        // Return a default GraphQL query if file doesn't exist
-        return 'query Proposal { session { negotiate { result { sellerProposal { delivery { deliveryLines { availableDeliveryStrategies { handle amount { value { amount } } } } } payment { availablePaymentLines { paymentMethod { name } } } tax { totalTaxAmount { value { amount currencyCode } } } runningTotal { value { amount } } } } } } }';
-    }
     
-    $content = file_get_contents($filepath);
-    if ($content === false) return null;
-    
-    $pattern = '/' . preg_quote($operationName, '/') . '\s*\{[^}]*\}/s';
-    if (preg_match($pattern, $content, $matches)) {
-        return $matches[0];
+    // Try to load from jsonp.php using the helper function
+    if ($filename === 'jsonp.php' && file_exists($filepath)) {
+        @include_once $filepath;
+        if (function_exists('getGraphQLQuery')) {
+            return getGraphQLQuery($operationName);
+        }
     }
     
     // Fallback: return default query

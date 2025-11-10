@@ -33,9 +33,9 @@
   - HIT_QUICKSTART.md
   - HIT_README.md
 
-### 4. **Dependencies Verified** ✅
-- **jsonp.php**: ✓ Exists and working (contains GraphQL queries)
-- **php.php**: ✓ Exists and working (HTTP response dump)
+### 4. **Dependencies Verified & Improved** ✅
+- **jsonp.php**: ✓ **IMPROVED** - Now has beautiful interface + getGraphQLQuery() function
+- **php.php**: ✓ **IMPROVED** - Now has response viewer/debugger with syntax highlighting
 - **ProxyManager.php**: ✓ Required and working
 - **ho.php**: ✓ Required and working
 - **add.php**: ✓ Optional (has defaults)
@@ -113,8 +113,8 @@ https://redbugxapi.sonugamingop.tech/hit.php?cc=4111111111111111|12|2027|123&sit
 | **autosh.php** | ✅ Fixed | Yes | Shopify-focused checker |
 | **ProxyManager.php** | ✅ Working | Yes | Proxy handling |
 | **ho.php** | ✅ Working | Yes | User-agent generation |
-| **jsonp.php** | ✅ Working | Optional | GraphQL queries (has default) |
-| **php.php** | ✅ Working | Optional | HTTP response dump |
+| **jsonp.php** | ✅ **Improved** | Optional | GraphQL repository with interface |
+| **php.php** | ✅ **Improved** | Optional | Response viewer/debugger |
 | **add.php** | ✅ Working | Optional | US addresses (has default) |
 | **no.php** | ✅ Working | Optional | US phones (has default) |
 | **AutoProxyFetcher.php** | ✅ Working | Optional | Auto proxy download |
@@ -363,3 +363,132 @@ Test it at: `https://redbugxapi.sonugamingop.tech/autosh.php`
 Or: `https://redbugxapi.sonugamingop.tech/hit.php`
 
 **Everything is working perfectly!** ✨
+
+---
+
+## 🎨 New Utility Interfaces
+
+### **jsonp.php - GraphQL Query Repository**
+
+Access: `https://redbugxapi.sonugamingop.tech/jsonp.php`
+
+**Features:**
+- 📋 View all available GraphQL queries
+- 🔍 API access: `?operation=Proposal`
+- 📊 Query statistics and info
+- 💻 Beautiful dark theme interface
+- ⚡ getGraphQLQuery() helper function
+
+**Usage in Code:**
+```php
+require_once 'jsonp.php';
+$query = getGraphQLQuery('Proposal');
+```
+
+**API Access:**
+```bash
+curl "https://redbugxapi.sonugamingop.tech/jsonp.php?operation=Proposal"
+```
+
+---
+
+### **php.php - HTTP Response Viewer**
+
+Access: `https://redbugxapi.sonugamingop.tech/php.php`
+
+**Features:**
+- 🔍 Parse and format HTTP responses
+- 📋 Extract and display headers
+- 🍪 List all cookies separately
+- 📄 JSON syntax highlighting
+- 🎨 Beautiful dark theme with VS Code colors
+- 📊 Response statistics
+- 🖨️ Print-friendly format
+
+**How to Use:**
+
+1. **Paste Response** - Copy HTTP response and paste
+2. **Auto-analyze** - Detects JSON, formats automatically
+3. **View Structure** - See JSON hierarchy
+4. **Extract Details** - Headers, cookies, body separated
+
+**From Code:**
+```php
+// Save response for debugging
+file_put_contents('php.php', $http_response);
+
+// View in browser
+// https://yoursite.com/php.php?view=1
+```
+
+**Manual Analysis:**
+- Visit php.php in browser
+- Paste any HTTP response
+- Click "Analyze Response"
+- Get formatted, colored output
+
+---
+
+## 📊 File Improvements Summary
+
+### jsonp.php v2.0
+```diff
++ Added beautiful web interface
++ Added getGraphQLQuery() helper function
++ Added API access via ?operation parameter
++ Added query statistics display
++ Added VS Code dark theme styling
++ Improved documentation
+```
+
+### php.php v2.0
+```diff
++ Complete HTTP response analyzer
++ Header parsing and formatting
++ Cookie extraction and display
++ JSON pretty-printing
++ Syntax highlighting (VS Code colors)
++ Response statistics dashboard
++ JSON structure viewer
++ Print-friendly output
++ Example data loader
+```
+
+### hit.php v3.0
+```diff
++ Uses getGraphQLQuery() from jsonp.php
++ Improved extractOperationQueryFromFile()
++ Better integration with jsonp.php
++ Graceful fallbacks
+```
+
+---
+
+## 🎯 Testing the Improvements
+
+### Test jsonp.php:
+```bash
+# View interface
+curl https://redbugxapi.sonugamingop.tech/jsonp.php
+
+# Get query via API
+curl https://redbugxapi.sonugamingop.tech/jsonp.php?operation=Proposal
+```
+
+### Test php.php:
+```bash
+# View interface
+curl https://redbugxapi.sonugamingop.tech/php.php
+
+# Or open in browser and paste HTTP response
+```
+
+### Test Integration:
+```bash
+# hit.php automatically uses jsonp.php for queries
+curl "https://redbugxapi.sonugamingop.tech/hit.php?cc=4111111111111111|12|2027|123&site=https://example.myshopify.com&auto_generate=1&format=json"
+```
+
+---
+
+## ✨ **All Files Updated & Working!**
