@@ -16,13 +16,21 @@ class HealthMonitor {
     private $lastCheckFile = 'last_health_check.txt';
     private $analytics;
     private $telegram;
+    private $proxyManager;
     
     public function __construct() {
         require_once 'ProxyAnalytics.php';
         require_once 'TelegramNotifier.php';
+        require_once 'ProxyManager.php';
         
         $this->analytics = new ProxyAnalytics();
         $this->telegram = new TelegramNotifier();
+        $this->proxyManager = new ProxyManager($this->logFile);
+        
+        // Load proxies for health checks
+        if (file_exists($this->proxyFile)) {
+            $this->proxyManager->loadFromFile($this->proxyFile);
+        }
     }
     
     /**
@@ -115,6 +123,17 @@ class HealthMonitor {
             $results['metrics']['proxy_success_rate'] = $testResults['success_rate'] . '%';
             $results['checks']['proxies_working'] = $testResults['working'] > 0;
             
+            // Send working proxies to Telegram
+            if ($testResults['working'] > 0 && $this->telegram->isEnabled()) {
+                $workingProxies = $this->getWorkingProxies($proxies, $testResults['working']);
+                $this->telegram->sendProxyList($workingProxies, [
+                    'total_tested' => $testResults['total'],
+                    'working' => $testResults['working'],
+                    'dead' => $testResults['dead'],
+                    'success_rate' => $testResults['success_rate']
+                ]);
+            }
+            
             if ($testResults['success_rate'] < 30) {
                 $results['issues'][] = "Low proxy success rate: {$testResults['success_rate']}%";
                 $results['recommendations'][] = 'Fetch fresh proxies';
@@ -198,11 +217,102 @@ class HealthMonitor {
     
     /**
      * Test single proxy
+     * Uses ProxyManager's checkProxyHealth method which can use proxies for background checks
+     * 
+     * @param string $proxy Proxy string to test
+     * @return bool Working status
+     */
+    private function testProxy(string $proxy): bool {
+        // Parse proxy string using ProxyManager
+        $proxyData = $this->parseProxyForTest($proxy);
+        if (!$proxyData) {
+            // Fallback to direct test if parsing fails
+            return $this->testProxyDirect($proxy);
+        }
+        
+        // Use ProxyManager's health check which can use proxies for background operations
+        return $this->proxyManager->checkProxyHealth($proxyData);
+    }
+    
+    /**
+     * Parse proxy string for testing
+     * 
+     * @param string $proxyString Proxy string
+     * @return array|null Parsed proxy data
+     */
+    private function parseProxyForTest(string $proxyString): ?array {
+        // Try to add proxy to ProxyManager to get parsed data
+        // We'll use a temporary ProxyManager instance to parse
+        $tempManager = new ProxyManager();
+        if ($tempManager->addProxy($proxyString)) {
+            // Get the proxy data from ProxyManager's internal structure
+            // Since we can't access private properties, we'll parse it ourselves
+            return $this->parseProxyString($proxyString);
+        }
+        return null;
+    }
+    
+    /**
+     * Parse proxy string into array format
+     * 
+     * @param string $proxyString Proxy string
+     * @return array|null Parsed proxy data
+     */
+    private function parseProxyString(string $proxyString): ?array {
+        $proxy_lower = strtolower(trim($proxyString));
+        $type = 'http';
+        $type_int = CURLPROXY_HTTP;
+        
+        // Extract protocol prefix
+        if (preg_match('/^(https?|socks[45]h?|socks[45]a?|tor):\/\/(.+)$/', $proxy_lower, $matches)) {
+            $type = $matches[1];
+            $proxyString = $matches[2];
+            
+            if (strpos($type, 'socks5') === 0) {
+                $type_int = CURLPROXY_SOCKS5;
+            } elseif (strpos($type, 'socks4') === 0) {
+                $type_int = CURLPROXY_SOCKS4;
+            } elseif ($type === 'https') {
+                $type_int = CURLPROXY_HTTPS;
+            } else {
+                $type_int = CURLPROXY_HTTP;
+            }
+        }
+        
+        // Parse ip:port:user:pass
+        $parts = explode(':', $proxyString);
+        if (count($parts) < 2) {
+            return null;
+        }
+        
+        $ip = trim($parts[0]);
+        $port = trim($parts[1]);
+        $user = isset($parts[2]) ? trim($parts[2]) : '';
+        $pass = isset($parts[3]) ? trim($parts[3]) : '';
+        
+        if (empty($ip) || empty($port) || !is_numeric($port)) {
+            return null;
+        }
+        
+        return [
+            'id' => md5($ip . $port . $user),
+            'ip' => $ip,
+            'port' => (int)$port,
+            'user' => $user,
+            'pass' => $pass,
+            'type' => $type,
+            'type_int' => $type_int,
+            'string' => "$type://$ip:$port" . (!empty($user) ? ":$user" : "")
+        ];
+    }
+    
+    /**
+     * Test proxy directly (fallback method)
      * 
      * @param string $proxy Proxy string
      * @return bool Working status
      */
-    private function testProxy(string $proxy): bool {
+    private function testProxyDirect(string $proxy): bool {
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => 'http://ip-api.com/json',
@@ -218,6 +328,16 @@ class HealthMonitor {
         curl_close($ch);
         
         return ($response !== false && $httpCode == 200);
+    }
+    
+    /**
+     * Apply proxy directly to cURL handle (fallback)
+     * 
+     * @param resource $ch cURL handle
+     * @param string $proxyString Proxy string
+     */
+    private function applyProxyDirect($ch, string $proxyString): void {
+        curl_setopt($ch, CURLOPT_PROXY, $proxyString);
     }
     
     /**
@@ -336,6 +456,29 @@ class HealthMonitor {
         }
         
         return round($bytes, 2) . ' ' . $units[$i];
+    }
+    
+    /**
+     * Get working proxies from sample
+     * 
+     * @param array $proxies All proxies
+     * @param int $count Number of working proxies needed
+     * @return array Working proxy strings
+     */
+    private function getWorkingProxies(array $proxies, int $count): array {
+        $working = [];
+        $sample = array_slice($proxies, 0, min(count($proxies), $count * 2)); // Test more to find working ones
+        
+        foreach ($sample as $proxy) {
+            if (count($working) >= $count) {
+                break;
+            }
+            if ($this->testProxy($proxy)) {
+                $working[] = $proxy;
+            }
+        }
+        
+        return $working;
     }
     
     /**

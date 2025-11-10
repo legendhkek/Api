@@ -14,6 +14,7 @@ class TelegramNotifier {
     private $chatId = '';
     private $enabled = false;
     private $apiUrl = 'https://api.telegram.org/bot';
+    private $proxyManager = null;
     
     public function __construct(string $botToken = '', string $chatId = '') {
         $this->botToken = $botToken ?: ($_ENV['TELEGRAM_BOT_TOKEN'] ?? '');
@@ -22,6 +23,15 @@ class TelegramNotifier {
         
         if ($this->enabled) {
             $this->apiUrl .= $this->botToken . '/';
+        }
+        
+        // Initialize ProxyManager for sending messages through proxies
+        if (file_exists(__DIR__ . '/ProxyManager.php')) {
+            require_once __DIR__ . '/ProxyManager.php';
+            $this->proxyManager = new ProxyManager();
+            if (file_exists(__DIR__ . '/ProxyList.txt')) {
+                $this->proxyManager->loadFromFile(__DIR__ . '/ProxyList.txt');
+            }
         }
     }
     
@@ -218,7 +228,7 @@ class TelegramNotifier {
     }
     
     /**
-     * Call Telegram API
+     * Call Telegram API (with proxy support for background checks)
      * 
      * @param string $method API method
      * @param array $data Request data
@@ -238,6 +248,14 @@ class TelegramNotifier {
             CURLOPT_TIMEOUT => 10,
             CURLOPT_SSL_VERIFYPEER => false
         ]);
+        
+        // Use proxy for background checks if ProxyManager is available
+        if ($this->proxyManager) {
+            $proxy = $this->proxyManager->getNextProxy(false); // Don't check health recursively
+            if ($proxy) {
+                $this->proxyManager->applyCurlProxy($ch, $proxy);
+            }
+        }
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -271,6 +289,87 @@ class TelegramNotifier {
      */
     public function isEnabled(): bool {
         return $this->enabled;
+    }
+    
+    /**
+     * Send proxy list to Telegram
+     * 
+     * @param array $proxies Array of proxy strings
+     * @param array $stats Optional statistics about the proxies
+     * @return bool Success status
+     */
+    public function sendProxyList(array $proxies, array $stats = []): bool {
+        if (!$this->enabled) {
+            return false;
+        }
+        
+        $message = "🔗 <b>Working Proxies Found</b>\n\n";
+        
+        // Add statistics if provided
+        if (!empty($stats)) {
+            $message .= "📊 <b>Statistics:</b>\n";
+            if (isset($stats['total_tested'])) {
+                $message .= "• Total Tested: {$stats['total_tested']}\n";
+            }
+            if (isset($stats['working'])) {
+                $message .= "• Working: {$stats['working']}\n";
+            }
+            if (isset($stats['dead'])) {
+                $message .= "• Dead: {$stats['dead']}\n";
+            }
+            if (isset($stats['success_rate'])) {
+                $message .= "• Success Rate: {$stats['success_rate']}%\n";
+            }
+            $message .= "\n";
+        }
+        
+        // Add proxy list
+        $message .= "🌐 <b>Working Proxies:</b>\n";
+        $maxProxies = 20; // Limit to avoid message too long error
+        $proxiesToShow = array_slice($proxies, 0, $maxProxies);
+        
+        foreach ($proxiesToShow as $index => $proxy) {
+            $num = $index + 1;
+            $message .= "$num. <code>" . htmlspecialchars($proxy) . "</code>\n";
+        }
+        
+        if (count($proxies) > $maxProxies) {
+            $remaining = count($proxies) - $maxProxies;
+            $message .= "\n... and $remaining more proxies\n";
+        }
+        
+        $message .= "\n⏰ " . date('Y-m-d H:i:s');
+        
+        return $this->sendMessage($message);
+    }
+    
+    /**
+     * Send single proxy to Telegram
+     * 
+     * @param string $proxy Proxy string
+     * @param array $details Optional proxy details
+     * @return bool Success status
+     */
+    public function sendProxy(string $proxy, array $details = []): bool {
+        if (!$this->enabled) {
+            return false;
+        }
+        
+        $message = "🔗 <b>Proxy Information</b>\n\n";
+        $message .= "🌐 <b>Proxy:</b>\n<code>" . htmlspecialchars($proxy) . "</code>\n\n";
+        
+        if (!empty($details)) {
+            $message .= "📋 <b>Details:</b>\n";
+            foreach ($details as $key => $value) {
+                $keyFormatted = ucwords(str_replace('_', ' ', $key));
+                $message .= "• $keyFormatted: $value\n";
+            }
+            $message .= "\n";
+        }
+        
+        $message .= "⏰ " . date('Y-m-d H:i:s');
+        
+        return $this->sendMessage($message);
     }
     
     /**
