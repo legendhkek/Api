@@ -1,0 +1,300 @@
+═══════════════════════════════════════════════════════════════
+  HOSTING GUIDE - SHOPIFY API SYSTEM
+═══════════════════════════════════════════════════════════════
+
+✅ THREE HOSTING OPTIONS AVAILABLE
+
+══════════════════════════════════════════════════════════════
+  OPTION 1: LOCAL HOSTING (PHP Built-in Server)
+══════════════════════════════════════════════════════════════
+
+📌 QUICKEST WAY TO START!
+
+WINDOWS:
+--------
+1. Double-click: START_SERVER.bat
+2. Open browser: http://localhost:8000
+3. That's it! Server is running
+
+LINUX/MAC:
+----------
+1. Make executable: chmod +x start_server.sh
+2. Run: ./start_server.sh
+3. Open browser: http://localhost:8000
+
+MANUAL START:
+-------------
+php -S localhost:8000 -t . router.php
+
+✅ Advantages:
+   - No installation needed (just PHP)
+   - Instant setup (1 click)
+   - Perfect for development/testing
+   - All features work immediately
+
+⚠️ Note: Built-in server is for development only
+
+══════════════════════════════════════════════════════════════
+  OPTION 2: XAMPP/WAMP (Local Production)
+══════════════════════════════════════════════════════════════
+
+📌 BEST FOR LOCAL PRODUCTION USE
+
+SETUP STEPS:
+------------
+1. Install XAMPP/WAMP
+   XAMPP: https://www.apachefriends.org/
+   WAMP: https://www.wampserver.com/
+
+2. Copy project to web directory:
+   
+   XAMPP: C:\xampp\htdocs\shopify-api\
+   Copy all files from current directory to above location
+   
+   WAMP: C:\wamp64\www\shopify-api\
+   Copy all files from current directory to above location
+
+3. Start Apache from XAMPP/WAMP Control Panel
+
+4. Access in browser:
+   http://localhost/shopify-api/
+
+✅ Advantages:
+   - Full Apache server features
+   - Better performance than built-in server
+   - Support for .htaccess
+   - MySQL/phpMyAdmin included
+   - Professional local environment
+
+XAMPP QUICK DEPLOY (Automated):
+--------------------------------
+Run: DEPLOY_TO_XAMPP.bat
+This will:
+1. Detect XAMPP installation
+2. Copy all files automatically
+3. Configure permissions
+4. Open in browser
+
+══════════════════════════════════════════════════════════════
+  OPTION 3: ONLINE HOSTING (Production Server)
+══════════════════════════════════════════════════════════════
+
+📌 FOR PUBLIC ACCESS & PRODUCTION USE
+
+REQUIREMENTS:
+-------------
+✓ PHP 7.4 or higher (8.0+ recommended)
+✓ cURL extension enabled
+✓ JSON extension enabled
+✓ 256MB memory limit (recommended)
+✓ 300s max execution time
+✓ allow_url_fopen enabled
+
+RECOMMENDED HOSTS:
+------------------
+
+1. 🔥 INFINITYFREE (FREE)
+   - URL: https://infinityfree.net/
+   - Features: Free PHP hosting, no ads
+   - Setup time: 5 minutes
+   - Perfect for testing
+   
+2. 🚀 HOSTINGER ($1.99/month)
+   - URL: https://www.hostinger.com/
+   - Features: Fast SSD, cPanel, SSL
+   - Perfect for production
+   
+3. ⚡ DIGITALOCEAN ($4/month)
+   - URL: https://www.digitalocean.com/
+   - Features: VPS, full control, scalable
+   - For advanced users
+
+DEPLOYMENT STEPS (cPanel):
+--------------------------
+
+1. Login to your hosting cPanel
+
+2. Open File Manager
+
+3. Navigate to public_html (or www)
+
+4. Upload all files:
+   - Zip entire project folder
+   - Upload zip file to server
+   - Extract on server
+   
+   OR use FTP:
+   - Download FileZilla
+   - Connect with FTP credentials
+   - Upload all files
+
+5. Set Permissions:
+   chmod 755 for all .php files
+   chmod 666 for ProxyList.txt
+   chmod 666 for cc_responses.txt
+
+6. Configure PHP (if needed):
+   Create php.ini with:
+   
+   max_execution_time = 300
+   memory_limit = 256M
+   allow_url_fopen = On
+   
+7. Access your site:
+   https://yourdomain.com/
+
+DEPLOYMENT FILES INCLUDED:
+--------------------------
+✓ .htaccess - Apache configuration
+✓ robots.txt - Search engine rules
+✓ index.html - Homepage/dashboard
+✓ All PHP files optimized
+
+══════════════════════════════════════════════════════════════
+  SECURITY RECOMMENDATIONS (Online Hosting)
+══════════════════════════════════════════════════════════════
+
+🔒 IMPORTANT SECURITY STEPS:
+
+1. Protect Sensitive Files:
+   Create .htaccess in root:
+   
+   <Files "ProxyList.txt">
+       Require all denied
+   </Files>
+   <Files "cc_responses.txt">
+       Require all denied
+   </Files>
+   <Files "*.log">
+       Require all denied
+   </Files>
+
+2. Use Environment Variables:
+   Move Telegram bot token to .env file
+   Add .env to .gitignore
+
+3. Add Basic Authentication:
+   htpasswd protection for admin pages
+
+4. Enable HTTPS:
+   Get free SSL from Let's Encrypt
+   Force HTTPS in .htaccess
+
+5. Rate Limiting:
+   Add IP-based rate limiting to prevent abuse
+
+6. Hide PHP Version:
+   expose_php = Off in php.ini
+
+══════════════════════════════════════════════════════════════
+  ACCESSING YOUR HOSTED APPLICATION
+══════════════════════════════════════════════════════════════
+
+LOCAL (Option 1 & 2):
+---------------------
+🏠 Homepage: http://localhost:8000/
+📊 Dashboard: http://localhost:8000/index.html
+🔄 Fetch Proxies: http://localhost:8000/fetch_proxies.php
+💳 Main Script: http://localhost:8000/autosh.php?cc=...&site=...
+📱 API Mode: http://localhost:8000/fetch_proxies.php?api=1
+
+ONLINE (Option 3):
+------------------
+🌐 Homepage: https://yourdomain.com/
+📊 Dashboard: https://yourdomain.com/index.html
+🔄 Fetch Proxies: https://yourdomain.com/fetch_proxies.php
+💳 Main Script: https://yourdomain.com/autosh.php?cc=...&site=...
+📱 API Mode: https://yourdomain.com/fetch_proxies.php?api=1
+
+══════════════════════════════════════════════════════════════
+  TESTING YOUR DEPLOYMENT
+══════════════════════════════════════════════════════════════
+
+1. Open homepage:
+   ✓ Should see dashboard with all features
+
+2. Test proxy fetcher:
+   ✓ Click "Fetch & Test Proxies"
+   ✓ Should see real-time scraping
+   ✓ ProxyList.txt should update
+
+3. Test main script:
+   ✓ Run with test card
+   ✓ Check Telegram for logs
+   ✓ Verify proxy usage
+
+4. Check logs:
+   ✓ cc_responses.txt for card logs
+   ✓ proxy_log.txt for proxy tests
+
+══════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+══════════════════════════════════════════════════════════════
+
+❌ "PHP not found":
+   → Install PHP or update path in START_SERVER.bat
+
+❌ "Port 8000 already in use":
+   → Change port in command: php -S localhost:9000 -t . router.php
+
+❌ "cURL error":
+   → Enable cURL extension in php.ini
+
+❌ "Permission denied":
+   → chmod 755 *.php
+   → chmod 666 ProxyList.txt
+
+❌ "Telegram not sending":
+   → Verify bot token is correct
+   → Check internet connection
+   → Test with curl
+
+❌ "Proxy not working":
+   → Run fetch_proxies.php to get fresh proxies
+   → Check ProxyList.txt format
+
+══════════════════════════════════════════════════════════════
+  PERFORMANCE TIPS
+══════════════════════════════════════════════════════════════
+
+✓ Use OPcache for PHP (already configured in .htaccess)
+✓ Enable compression (already configured)
+✓ Keep ProxyList.txt updated with working proxies
+✓ Run auto health checks every hour
+✓ Monitor server resources
+✓ Use CDN for static files (if online)
+
+══════════════════════════════════════════════════════════════
+  NEXT STEPS
+══════════════════════════════════════════════════════════════
+
+1. ✅ Start local server (Option 1)
+2. ✅ Fetch working proxies
+3. ✅ Test with sample card
+4. ✅ Check Telegram logs
+5. ✅ Deploy to production (Option 3) when ready
+
+══════════════════════════════════════════════════════════════
+  SUPPORT
+══════════════════════════════════════════════════════════════
+
+📖 Documentation:
+   - SETUP_GUIDE.txt
+   - PERFORMANCE_IMPROVEMENTS.md
+   - TELEGRAM_LOGGING_UPDATE.txt
+
+🧪 Testing:
+   - test_proxy_system.php
+   - proxy_example.php
+
+📊 Monitoring:
+   - cc_responses.txt
+   - proxy_log.txt
+
+═══════════════════════════════════════════════════════════════
+
+🎉 YOUR APPLICATION IS READY TO HOST!
+
+Choose your option and start hosting in minutes!
+
+═══════════════════════════════════════════════════════════════

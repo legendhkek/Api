@@ -1,0 +1,51 @@
+# Performance optimizations for Apache
+<IfModule mod_deflate.c>
+    # Enable compression
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+<IfModule mod_expires.c>
+    # Enable browser caching
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Keep-Alive optimization
+    Header set Connection keep-alive
+    Header always set X-DNS-Prefetch-Control "off"
+    # Basic security headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "no-referrer-when-downgrade"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# PHP Performance Settings
+<IfModule mod_php.c>
+    php_value max_execution_time 900
+    php_value memory_limit 256M
+    php_value output_buffering 4096
+    php_flag opcache.enable On
+    php_value opcache.memory_consumption 128
+    php_value opcache.max_accelerated_files 10000
+</IfModule>
+
+# Deny access to sensitive files
+<Files "ProxyList.txt">
+    Require all denied
+</Files>
+<Files "cc_responses.txt">
+    Require all denied
+</Files>
+<Files "proxy_log.txt">
+    Require all denied
+</Files>
+<FilesMatch "\.(log|ini|env|bak|old)$">
+    Require all denied
+</FilesMatch>
