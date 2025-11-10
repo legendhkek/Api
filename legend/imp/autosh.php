@@ -294,7 +294,7 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 5;   // connect timeout seconds
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
     $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
@@ -1392,7 +1392,7 @@ function apply_proxy_if_used($ch, string $url): void {
  * - tests up to $concurrency proxies at a time
  * Returns full proxy string (may include scheme) or null
  */
-function select_working_proxy_parallel(string $file = 'ProxyList.txt', int $timeout = 3, int $concurrency = 200): ?string {
+function select_working_proxy_parallel(string $file = 'ProxyList.txt', int $timeout = 3, int $concurrency = 300): ?string {
     if (!file_exists($file)) return null;
     $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if (!$lines) return null;
@@ -1454,7 +1454,10 @@ function select_working_proxy_parallel(string $file = 'ProxyList.txt', int $time
         $running = null;
         do {
             $mrc = curl_multi_exec($mh, $running);
-            if ($running) curl_multi_select($mh, 1.0);
+            if ($running) {
+                curl_multi_select($mh, 0.5); // Reduced from 1.0 to 0.5 for faster response
+                usleep(10000); // 10ms sleep to reduce CPU usage
+            }
         } while ($running && $mrc == CURLM_OK);
 
         // Collect results
@@ -2057,7 +2060,10 @@ function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, arra
     $running = null;
     do {
         $mrc = curl_multi_exec($mh, $running);
-        if ($running) curl_multi_select($mh, 1.0);
+        if ($running) {
+            curl_multi_select($mh, 0.5); // Reduced from 1.0 to 0.5 for faster response
+            usleep(10000); // 10ms sleep to reduce CPU usage
+        }
     } while ($running && $mrc == CURLM_OK);
 
     $out = [];
@@ -3946,7 +3952,7 @@ if ($curlErr) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    sleep(2); // Espera 3 segundos antes de reintentar
+    sleep(1); // Wait 1 second before retrying (optimized)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
@@ -3955,7 +3961,7 @@ if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
     }
 }
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    sleep(2); // Espera 3 segundos antes de reintentar
+    sleep(1); // Wait 1 second before retrying (optimized)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
