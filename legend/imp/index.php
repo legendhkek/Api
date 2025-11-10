@@ -935,7 +935,8 @@ if ('serviceWorker' in navigator) {
                 <h2>🚀 Quick Actions</h2>
                 <p>Common operations and frequently used tools.</p>
                 <a href="fetch_proxies.php" class="btn btn-success" target="_blank">🌐 Fetch Proxies</a>
-                <a href="autosh.php?cc=4111111111111111|12|2027|123&site=https://example.myshopify.com" class="btn btn-warning" target="_blank">💳 Test Gateway</a>
+                <a href="hit.php" class="btn btn-success" target="_blank">💳 HIT - Custom Address Checker</a>
+                <a href="autosh.php?cc=4111111111111111|12|2027|123&site=https://example.myshopify.com" class="btn btn-warning" target="_blank">🔍 Auto Gateway Detect</a>
                 <a href="proxy_example.php" class="btn" target="_blank">📖 View Examples</a>
                 <a href="test_proxy_system.php" class="btn" target="_blank">🧪 Run Tests</a>
                 <a href="download_proxies.php" class="btn" target="_blank">📥 Download List</a>
@@ -1072,6 +1073,20 @@ if ('serviceWorker' in navigator) {
 
     <!-- Tools & Tests Tab -->
     <div id="tools-tab" class="tab-content">
+        <div class="card" style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-left: 4px solid #10b981;">
+            <h2>💳 HIT.PHP - Advanced Gateway Checker with Real APIs (NEW!)</h2>
+            <p><strong>Real gateway integration with Shopify, Stripe, WooCommerce & 50+ gateways!</strong> Uses actual JSON payment APIs from autosh.php. Address REQUIRED (no auto-generation).</p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+                <a href="hit.php" class="btn btn-success" target="_blank">🚀 Open HIT Checker</a>
+                <a href="HIT_ADVANCED_SUMMARY.txt" class="btn" target="_blank">📚 Features</a>
+                <a href="HIT_README.md" class="btn" target="_blank">📖 Docs</a>
+            </div>
+            <div style="margin-top: 15px; padding: 12px; background: white; border-radius: 8px; font-size: 13px;">
+                <strong>✅ Real APIs:</strong> Shopify payment sessions • Advanced GatewayDetector from autosh.php • JSON payment requests<br>
+                <strong>✅ Requirements:</strong> All 11 fields required • Address mandatory • No auto-generation • Proxy rotation
+            </div>
+        </div>
+        
         <div class="grid">
             <div class="card">
                 <h2>🧪 Test Specific Proxy</h2>
