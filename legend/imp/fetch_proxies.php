@@ -67,7 +67,7 @@ if (!$apiMode) {
 echo "<!DOCTYPE html>
 <html>
 <head>
-    <title>Proxy Fetcher & Tester</title>
+    <title>Proxy Fetcher & Tester - @LEGEND_BL</title>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -232,6 +232,7 @@ echo "<!DOCTYPE html>
 <div class='container'>
     <h1>🔍 Proxy Fetcher & Tester</h1>
     <p class='subtitle'>Automatically scrape, test, and save working proxies from multiple sources</p>
+    <p class='subtitle' style='font-size: 12px; margin-top: -5px;'>Owner: <strong>@LEGEND_BL</strong></p>
     
     <div class='stats'>
         <div class='stat-box'>
@@ -1190,8 +1191,22 @@ if (!empty($workingProxies)) {
         
         echo "<div class='button-group'>
             <a href='/' class='btn'>← Back to Dashboard</a>
-            <a href='ProxyList.txt' class='btn btn-secondary' download>📥 Download ProxyList.txt</a>
+            <a href='ProxyList.txt' class='btn btn-secondary' download>📥 Download Full List (TXT)</a>
+            <a href='download_proxies.php?format=json' class='btn btn-secondary' target='_blank'>📄 Download JSON</a>
             <a href='?api=1' class='btn btn-secondary' target='_blank'>📊 View JSON API</a>
+        </div>";
+        
+        echo "<div class='info-box' style='background:#e8f5e9;border-left-color:#4caf50;margin-top:20px;'>
+            <h3>🎯 Download Options</h3>
+            <p style='margin:5px 0;'><strong>Filter by type:</strong></p>
+            <div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;'>
+                <a href='download_proxies.php?type=http' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>HTTP Only</a>
+                <a href='download_proxies.php?type=https' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>HTTPS Only</a>
+                <a href='download_proxies.php?type=socks4' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>SOCKS4 Only</a>
+                <a href='download_proxies.php?type=socks5' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>SOCKS5 Only</a>
+                <a href='download_proxies.php?limit=50' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>Top 50</a>
+                <a href='download_proxies.php?limit=100' class='btn btn-secondary' style='font-size:12px;padding:6px 12px;'>Top 100</a>
+            </div>
         </div>";
         
         echo "</div></body></html>";
@@ -1226,6 +1241,7 @@ if (!empty($workingProxies)) {
         echo "<div class='button-group'>";
         echo "<a href='/' class='btn'>← Back to Dashboard</a>";
         echo "<a href='?' class='btn btn-secondary'>🔄 Try Again</a>";
+        echo "<a href='download_proxies.php?format=json' class='btn btn-secondary' target='_blank'>📄 View Current List (JSON)</a>";
         echo "</div>";
         
         echo "</div></body></html>";
