@@ -1,0 +1,92 @@
+═══════════════════════════════════════════════════════════
+   SUPPORTED PROXY TYPES - QUICK REFERENCE
+═══════════════════════════════════════════════════════════
+
+🌐 ALL PROXY TYPES SUPPORTED:
+
+1. HTTP Proxies
+   Format: http://ip:port:user:pass
+   Example: http://192.168.1.1:8080:username:password
+
+2. HTTPS Proxies
+   Format: https://ip:port:user:pass
+   Example: https://proxy.example.com:443:user:pass
+
+3. SOCKS4 Proxies
+   Format: socks4://ip:port
+   Example: socks4://192.168.1.1:1080
+
+4. SOCKS5 Proxies
+   Format: socks5://ip:port:user:pass
+   Example: socks5://proxy.example.com:1080:user:pass
+
+5. SOCKS5H Proxies (DNS over SOCKS)
+   Format: socks5h://ip:port:user:pass
+   Example: socks5h://secure.proxy.com:1080:user:pass
+
+6. SOCKS4A Proxies
+   Format: socks4a://ip:port
+   Example: socks4a://192.168.1.1:1080
+
+7. Residential Proxies
+   Format: residential://ip:port:user:pass
+   Example: residential://resi.proxy.com:8080:user:pass
+   Note: Treated as HTTP but tagged as residential
+
+8. Rotating Proxies
+   Format: rotating://gateway:port:user:pass
+   Example: rotating://gateway.proxy.com:8080:user:pass
+   Note: Auto-detects rotating gateways
+
+9. Datacenter Proxies
+   Format: datacenter://ip:port:user:pass
+   Example: datacenter://dc.proxy.com:8080:user:pass
+
+10. Mobile Proxies
+    Format: mobile://ip:port:user:pass
+    Example: mobile://mobile.proxy.com:8080:user:pass
+
+11. ISP Proxies
+    Format: isp://ip:port:user:pass
+    Example: isp://isp.proxy.com:8080:user:pass
+
+═══════════════════════════════════════════════════════════
+
+🔄 AUTO-ROTATION:
+
+- Enabled by default (no need for rotate=1)
+- Automatically rotates through all proxies
+- Supports mixed proxy types in same list
+- Rate limit protection included
+- Use rotate=0 to disable if needed
+
+═══════════════════════════════════════════════════════════
+
+📝 PROXYLIST.TXT FORMAT:
+
+You can mix different proxy types in the same file:
+
+http://1.2.3.4:8080:user:pass
+socks5://5.6.7.8:1080:user:pass
+residential://resi.proxy.com:8080:user:pass
+rotating://gateway.proxy.com:8888:user:pass
+datacenter://dc.proxy.com:3128
+mobile://mobile.proxy.com:8080:user:pass
+
+═══════════════════════════════════════════════════════════
+
+🚀 USAGE:
+
+Basic (auto-rotation enabled):
+curl "http://localhost:8000/autosh.php?cc=CARD&site=URL"
+
+Disable rotation:
+curl "http://localhost:8000/autosh.php?cc=CARD&site=URL&rotate=0"
+
+With specific proxy type filter:
+curl "http://localhost:8000/autosh.php?cc=CARD&site=URL&country=us"
+
+═══════════════════════════════════════════════════════════
+
+Version: 4.2.0
+Owner: @LEGEND_BL

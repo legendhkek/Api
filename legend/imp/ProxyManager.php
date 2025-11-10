@@ -37,6 +37,17 @@ class ProxyManager {
     const TYPE_SOCKS5 = CURLPROXY_SOCKS5;
     const TYPE_TOR = CURLPROXY_SOCKS5; // Tor uses SOCKS5
     
+    // Extended proxy type support
+    private $supportedTypes = [
+        'http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h',
+        'residential', 'rotating', 'datacenter', 'mobile', 'isp'
+    ];
+    
+    // Rotating proxy detection patterns
+    private $rotatingProxyPatterns = [
+        'rotating', 'rotate', 'backconnect', 'gateway', 'pool'
+    ];
+    
     /**
      * Constructor
      * 
@@ -119,7 +130,23 @@ class ProxyManager {
     }
     
     /**
-     * Parse proxy string into structured array
+     * Check if proxy is a rotating proxy
+     * 
+     * @param string $proxyString Proxy string
+     * @return bool Whether proxy is rotating type
+     */
+    private function isRotatingProxy(string $proxyString): bool {
+        $lower = strtolower($proxyString);
+        foreach ($this->rotatingProxyPatterns as $pattern) {
+            if (strpos($lower, $pattern) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Parse proxy string into structured array with support for all proxy types
      * 
      * @param string $proxyString Proxy string
      * @return array|null Parsed proxy data or null on failure
@@ -129,23 +156,33 @@ class ProxyManager {
         $proxy_lower = strtolower(trim($proxyString));
         $type = 'http';
         $type_int = self::TYPE_HTTP;
+        $originalType = null;
+        $isRotating = $this->isRotatingProxy($proxyString);
         
-        // Extract protocol prefix
-        if (preg_match('/^(https?|socks[45]h?|socks[45]a?|tor):\/\/(.+)$/', $proxy_lower, $matches)) {
+        // Extract protocol prefix - support all types
+        if (preg_match('/^(https?|socks[45]h?|socks[45]a?|tor|residential|rotating|datacenter|mobile|isp):\/\/(.+)$/', $proxy_lower, $matches)) {
             $type = $matches[1];
             $proxyString = $matches[2];
             
-            // Map type string to cURL constant
-            if (strpos($type, 'socks5') === 0) {
-                $type_int = self::TYPE_SOCKS5;
-            } elseif (strpos($type, 'socks4') === 0) {
-                $type_int = self::TYPE_SOCKS4;
-            } elseif ($type === 'https') {
-                $type_int = self::TYPE_HTTPS;
-            } elseif ($type === 'tor') {
-                $type_int = self::TYPE_TOR;
-            } else {
+            // Track original type for special proxies
+            if (in_array($type, ['residential', 'rotating', 'datacenter', 'mobile', 'isp'])) {
+                $originalType = $type;
+                $type = 'http'; // Map to HTTP for cURL compatibility
                 $type_int = self::TYPE_HTTP;
+                $isRotating = $isRotating || ($originalType === 'rotating');
+            } else {
+                // Map type string to cURL constant
+                if (strpos($type, 'socks5') === 0) {
+                    $type_int = self::TYPE_SOCKS5;
+                } elseif (strpos($type, 'socks4') === 0) {
+                    $type_int = self::TYPE_SOCKS4;
+                } elseif ($type === 'https') {
+                    $type_int = self::TYPE_HTTPS;
+                } elseif ($type === 'tor') {
+                    $type_int = self::TYPE_TOR;
+                } else {
+                    $type_int = self::TYPE_HTTP;
+                }
             }
         }
         
@@ -181,7 +218,13 @@ class ProxyManager {
             'pass' => $pass,
             'type' => $type,
             'type_int' => $type_int,
-            'string' => "$type://$ip:$port" . (!empty($user) ? ":$user" : "")
+            'original_type' => $originalType ?? $type,
+            'string' => ($originalType ? "$originalType://" : "$type://") . "$ip:$port" . (!empty($user) ? ":$user" : ""),
+            'is_rotating' => $isRotating,
+            'is_residential' => ($originalType === 'residential'),
+            'is_datacenter' => ($originalType === 'datacenter'),
+            'is_mobile' => ($originalType === 'mobile'),
+            'is_isp' => ($originalType === 'isp')
         ];
     }
     

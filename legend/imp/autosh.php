@@ -79,13 +79,22 @@ if (isset($_GET['debug'])) {
 
 // Initialize captcha solver (use advanced solver)
 $captchaSolver = $advancedCaptchaSolver;
-// Default: do NOT auto-rotate proxy per request (opt-in via ?rotate=1)
-$ROTATE_PROXY_PER_REQUEST = false;
-// Optional runtime override: rotate=1|0 (ignored if a specific ?proxy= is supplied)
-if (!empty($_GET['rotate'])) {
+
+// Default: AUTO-ROTATE proxy per request (enabled by default)
+// Supports all proxy types: HTTP, HTTPS, SOCKS4/5, Residential, Rotating, Datacenter, Mobile, ISP
+$ROTATE_PROXY_PER_REQUEST = true;
+
+// Optional runtime override: rotate=0 to disable (specific ?proxy= also disables)
+if (isset($_GET['rotate'])) {
     $rot = trim((string)$_GET['rotate']);
-    if ($rot === '0' || $rot === 'false') { $ROTATE_PROXY_PER_REQUEST = false; }
-    elseif ($rot === '1' || $rot === 'true') { if (!isset($_GET['proxy']) || empty($_GET['proxy'])) $ROTATE_PROXY_PER_REQUEST = true; }
+    if ($rot === '0' || $rot === 'false') {
+        $ROTATE_PROXY_PER_REQUEST = false;
+    }
+}
+
+// If specific proxy is provided, disable auto-rotation
+if (!empty($_GET['proxy'])) {
+    $ROTATE_PROXY_PER_REQUEST = false;
 }
 
 // User-Agent rotation control (default: do NOT rotate per request step)

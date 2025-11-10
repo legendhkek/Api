@@ -1111,10 +1111,10 @@ if ('serviceWorker' in navigator) {
                 
                 <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div>
-                        <label>Proxy Rotation</label>
+                        <label>Proxy Rotation (Auto-enabled)</label>
                         <select name="rotate">
-                            <option value="1">Enabled</option>
-                            <option value="0">Disabled</option>
+                            <option value="">Auto (Default)</option>
+                            <option value="0">Disable</option>
                         </select>
                     </div>
                     <div>
@@ -1166,22 +1166,22 @@ if ('serviceWorker' in navigator) {
         </div>
         
         <div class="info-box success">
-            <h3>🛡️ Rate Limiting Protection</h3>
-            <p><strong>Automatic Detection:</strong> Detects HTTP 429, 503 status codes and rate limit keywords in responses.</p>
-            <p><strong>Intelligent Rotation:</strong> Automatically switches to next proxy when rate limited.</p>
+            <h3>🛡️ Advanced Proxy Features</h3>
+            <p><strong>Auto-Rotation:</strong> Automatic proxy rotation enabled by default - no configuration needed!</p>
+            <p><strong>All Proxy Types:</strong> HTTP, HTTPS, SOCKS4/5, Residential, Rotating, Datacenter, Mobile, ISP proxies.</p>
+            <p><strong>Rate Limit Protection:</strong> Detects HTTP 429/503 and automatically switches proxies.</p>
             <p><strong>Exponential Backoff:</strong> 1s, 2s, 5s, 10s, 20s delays between retries.</p>
-            <p><strong>Proxy Cooldown:</strong> Rate-limited proxies are temporarily skipped (default: 60s).</p>
-            <p><strong>Smart Recovery:</strong> Clears rate limit flag on successful requests.</p>
+            <p><strong>Smart Cooldown:</strong> Rate-limited proxies temporarily skipped (60s default).</p>
+            <p><strong>Rotating Proxy Support:</strong> Detects and handles rotating proxy gateways automatically.</p>
         </div>
 
         <div class="info-box warning">
             <h3>🧭 Using autosh.php</h3>
-            <p><strong>Basic usage:</strong> autosh.php?cc=CARD&site=URL</p>
-            <p><strong>With rotation:</strong> autosh.php?cc=CARD&site=URL&rotate=1&country=us</p>
-            <p><strong>With rate limit protection:</strong> autosh.php?cc=CARD&site=URL&rotate=1&rate_limit_detection=1&auto_rotate_rate_limit=1</p>
-            <p><strong>Custom rate limit settings:</strong> autosh.php?cc=CARD&site=URL&rate_limit_cooldown=120&max_rate_limit_retries=10</p>
-            <p><strong>Advanced tuning:</strong> autosh.php?cc=CARD&site=URL&cto=4&to=20&v4=1&format=json</p>
-            <p><strong>Parameters:</strong> sleep (delay), cto (connect timeout), to (total timeout), v4 (IPv4 only), rate_limit_detection (1/0), auto_rotate_rate_limit (1/0)</p>
+            <p><strong>Basic usage (auto-rotation enabled):</strong> autosh.php?cc=CARD&site=URL</p>
+            <p><strong>With country filter:</strong> autosh.php?cc=CARD&site=URL&country=us</p>
+            <p><strong>Disable rotation:</strong> autosh.php?cc=CARD&site=URL&rotate=0</p>
+            <p><strong>Advanced tuning:</strong> autosh.php?cc=CARD&site=URL&cto=4&to=20&format=json</p>
+            <p><strong>All proxy types supported:</strong> HTTP, HTTPS, SOCKS4/5, Residential, Rotating, Datacenter, Mobile, ISP</p>
         </div>
     </div>
 
@@ -1248,12 +1248,13 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
             <ul class="feature-list">
                 <li>50+ payment gateways and e-commerce platforms supported</li>
                 <li>Automatic gateway detection with confidence scoring</li>
+                <li>🔄 Auto-rotation enabled by default - zero configuration!</li>
+                <li>🌐 All proxy types: HTTP, HTTPS, SOCKS4/5, Residential, Rotating, Datacenter, Mobile, ISP</li>
                 <li>🛡️ Rate limiting detection and intelligent proxy rotation</li>
                 <li>⚡ Exponential backoff strategy for rate limits</li>
                 <li>12+ proxy sources with automatic scraping</li>
                 <li>200× concurrent proxy testing for maximum speed</li>
                 <li>Intelligent proxy rotation with health monitoring</li>
-                <li>HTTP, HTTPS, SOCKS4, SOCKS5, and Tor support</li>
                 <li>Real-time health checking and dead proxy removal</li>
                 <li>Advanced captcha solving without external APIs</li>
                 <li>Temporary proxy cooldown for rate-limited proxies</li>
