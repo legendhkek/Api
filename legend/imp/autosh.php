@@ -203,6 +203,56 @@ function transform_rotating_username(string $user): string {
     return $u;
 }
 
+if (!function_exists('sanitize_custom_input')) {
+    function sanitize_custom_input($value, string $disallowedPattern): ?string {
+        if (!is_string($value)) {
+            return null;
+        }
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        $sanitized = preg_replace($disallowedPattern, '', $value);
+        if ($sanitized === null) {
+            return null;
+        }
+        $sanitized = trim($sanitized);
+        return $sanitized === '' ? null : $sanitized;
+    }
+}
+
+if (!function_exists('split_house_number_from_line')) {
+    function split_house_number_from_line(string $line): array {
+        $trimmed = trim($line);
+        if ($trimmed === '') {
+            return [null, ''];
+        }
+        if (preg_match('/^([0-9]+[A-Za-z-]*)\s+(.*)$/', $trimmed, $matches)) {
+            return [$matches[1], trim($matches[2])];
+        }
+        return [null, $trimmed];
+    }
+}
+
+if (!function_exists('normalize_phone_for_checkout')) {
+    function normalize_phone_for_checkout(string $raw): ?string {
+        $digits = preg_replace('/\D+/', '', $raw);
+        if ($digits === null) {
+            return null;
+        }
+        if ($digits === '') {
+            return null;
+        }
+        if (strlen($digits) === 11 && $digits[0] === '1') {
+            $digits = substr($digits, 1);
+        }
+        if (strlen($digits) === 10) {
+            return '+1' . $digits;
+        }
+        return '+' . $digits;
+    }
+}
+
 // Extract target site early so proxy testing can validate against it when available
 $__requested_site_param = filter_input(INPUT_GET, 'site', FILTER_SANITIZE_URL);
 $__requested_site_for_test = null;
@@ -214,6 +264,54 @@ if (!empty($__requested_site_param)) {
 }
 
 require_once 'add.php';
+$customAddress = [];
+$addrLine1Raw = $_GET['addr_line1'] ?? ($_GET['addr_street'] ?? ($_GET['address_line1'] ?? null));
+$addrLine1 = sanitize_custom_input($addrLine1Raw, '/[^A-Za-z0-9\s\-\#\.,]/');
+$addrCity = sanitize_custom_input($_GET['addr_city'] ?? null, '/[^A-Za-z\s\-\']/');
+$addrStateRaw = $_GET['addr_state'] ?? null;
+$addrState = sanitize_custom_input($addrStateRaw, '/[^A-Za-z]/');
+if ($addrState !== null) {
+    $addrState = strtoupper(substr($addrState, 0, 2));
+}
+$addrZip = null;
+$addrZipRaw = $_GET['addr_zip'] ?? ($_GET['zipcode'] ?? null);
+if (is_string($addrZipRaw)) {
+    $zipDigits = preg_replace('/[^0-9]/', '', $addrZipRaw);
+    if ($zipDigits !== null) {
+        $zipDigits = substr($zipDigits, 0, 10);
+        if ($zipDigits !== '') {
+            $addrZip = $zipDigits;
+        }
+    }
+}
+$addrNumberRaw = $_GET['addr_number'] ?? ($_GET['addr_num'] ?? null);
+$addrNumber = sanitize_custom_input($addrNumberRaw, '/[^A-Za-z0-9\#\-\s]/');
+$addrLine2 = sanitize_custom_input($_GET['addr_line2'] ?? ($_GET['address_line2'] ?? null), '/[^A-Za-z0-9\s\-\#\.,]/');
+
+if ($addrLine1 && $addrCity && $addrState && $addrZip) {
+    if ($addrNumber === null) {
+        [$detectedNumber, $detectedStreet] = split_house_number_from_line($addrLine1);
+        if ($detectedNumber !== null) {
+            $addrNumber = $detectedNumber;
+            $addrLine1 = $detectedStreet;
+        }
+    }
+    if ($addrNumber === null || $addrNumber === '') {
+        $addrNumber = $randomAddress['numd'] ?? '';
+    }
+    $customAddress = [
+        'numd' => $addrNumber,
+        'address1' => $addrLine1,
+        'city' => $addrCity,
+        'state' => $addrState,
+        'zip' => $addrZip
+    ];
+    if ($addrLine2 !== null) {
+        $customAddress['address2'] = $addrLine2;
+    }
+    $randomAddress = array_merge($randomAddress, $customAddress);
+}
+
 $num_us = $randomAddress['numd'];
 $address_us = $randomAddress['address1'];
 $address = $num_us.' '.$address_us;
@@ -224,6 +322,13 @@ $zip_us = $randomAddress['zip'];
 require_once 'no.php';
 $areaCode = $areaCodes[array_rand($areaCodes)];
 $phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+$customPhoneRaw = $_GET['addr_phone'] ?? ($_GET['phone'] ?? null);
+if (is_string($customPhoneRaw)) {
+    $normalizedPhone = normalize_phone_for_checkout($customPhoneRaw);
+    if ($normalizedPhone !== null) {
+        $phone = $normalizedPhone;
+    }
+}
 
 // Important functions start
 // Lightweight embedded utilities: CaptchaSolver and GatewayDetector
@@ -1724,6 +1829,21 @@ $lastname = find_between($resposta, '"last":"', '"');
 
 // Set your own email directly
 $email = "sarthakgrid@gmail.com"; // Replace with your actual email
+$firstOverride = sanitize_custom_input($_GET['addr_first'] ?? ($_GET['first_name'] ?? null), '/[^A-Za-z\-\s]/');
+if ($firstOverride !== null) {
+    $firstname = $firstOverride;
+}
+$lastOverride = sanitize_custom_input($_GET['addr_last'] ?? ($_GET['last_name'] ?? null), '/[^A-Za-z\-\s]/');
+if ($lastOverride !== null) {
+    $lastname = $lastOverride;
+}
+$emailOverrideRaw = $_GET['addr_email'] ?? ($_GET['email'] ?? null);
+if (is_string($emailOverrideRaw)) {
+    $validatedEmail = filter_var(trim($emailOverrideRaw), FILTER_VALIDATE_EMAIL);
+    if ($validatedEmail !== false && $validatedEmail !== null) {
+        $email = $validatedEmail;
+    }
+}
 
 function getMinimumPriceProductDetails(string $json): array {
     $data = json_decode($json, true);
