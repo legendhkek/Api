@@ -207,6 +207,7 @@ function updateProxyList() {
     
     $workingCount = count($result['working']);
     $deadCount = count($result['dead']);
+    $successRate = round(($workingCount / $result['total']) * 100, 1);
     
     echo "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
     echo "📊 Health Check Results:\n";
@@ -214,8 +215,11 @@ function updateProxyList() {
     echo "Total Proxies: {$result['total']}\n";
     echo "✅ Working: $workingCount\n";
     echo "❌ Dead: $deadCount\n";
-    echo "Success Rate: " . round(($workingCount / $result['total']) * 100, 1) . "%\n";
+    echo "Success Rate: $successRate%\n";
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+    
+    // Send to Telegram if configured
+    sendTelegramNotification($workingCount, $deadCount, $result['total'], $successRate, $result['working']);
     
     if (empty($result['working'])) {
         echo "⚠️  WARNING: No working proxies found!\n";
@@ -236,6 +240,62 @@ function updateProxyList() {
     echo "⏰ Next check in 1 hour\n";
     
     return true;
+}
+
+/**
+ * Send Telegram notification with proxy check results
+ */
+function sendTelegramNotification($working, $dead, $total, $successRate, $workingProxies) {
+    // Check if Telegram is configured
+    $botToken = $_ENV['TELEGRAM_BOT_TOKEN'] ?? getenv('TELEGRAM_BOT_TOKEN');
+    $chatId = $_ENV['TELEGRAM_CHAT_ID'] ?? getenv('TELEGRAM_CHAT_ID');
+    
+    if (empty($botToken) || empty($chatId)) {
+        echo "ℹ️  Telegram notifications not configured (skipping)\n";
+        return false;
+    }
+    
+    // Load TelegramNotifier if available
+    if (file_exists(__DIR__ . '/TelegramNotifier.php')) {
+        require_once __DIR__ . '/TelegramNotifier.php';
+        $telegram = new TelegramNotifier($botToken, $chatId);
+        
+        // Determine emoji based on success rate
+        $emoji = $successRate >= 70 ? '✅' : ($successRate >= 40 ? '⚠️' : '❌');
+        
+        // Build message
+        $message = "$emoji <b>Proxy Health Check Complete</b>\n\n";
+        $message .= "📊 <b>Results:</b>\n";
+        $message .= "• Total: $total\n";
+        $message .= "• Working: $working\n";
+        $message .= "• Dead: $dead\n";
+        $message .= "• Success Rate: $successRate%\n\n";
+        
+        // Add working proxies if reasonable count
+        if ($working > 0 && $working <= 20) {
+            $message .= "📋 <b>Working Proxies:</b>\n";
+            $message .= "<code>" . implode("\n", array_slice($workingProxies, 0, 20)) . "</code>\n\n";
+        } elseif ($working > 20) {
+            $message .= "📋 <b>Working Proxies (Sample):</b>\n";
+            $message .= "<code>" . implode("\n", array_slice($workingProxies, 0, 10)) . "</code>\n";
+            $message .= "... and " . ($working - 10) . " more\n\n";
+        }
+        
+        $message .= "⏰ " . date('Y-m-d H:i:s');
+        
+        $result = $telegram->sendMessage($message);
+        
+        if ($result) {
+            echo "✅ Telegram notification sent\n";
+        } else {
+            echo "❌ Failed to send Telegram notification\n";
+        }
+        
+        return $result;
+    } else {
+        echo "⚠️  TelegramNotifier.php not found\n";
+        return false;
+    }
 }
 
 /**
