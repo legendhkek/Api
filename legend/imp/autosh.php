@@ -1037,6 +1037,38 @@ if ($endPos === false) {
 return substr($content, $startPos, $endPos - $startPos);
 }
 
+function str_ends_with_ci(string $haystack, string $needle): bool {
+    if ($needle === '') {
+        return true;
+    }
+    $len = strlen($needle);
+    if ($len === 0 || $len > strlen($haystack)) {
+        return false;
+    }
+    return strcasecmp(substr($haystack, -$len), $needle) === 0;
+}
+
+function is_trusted_checkout_host(string $host, string $expectedDomain = ''): bool {
+    $host = strtolower(trim($host));
+    $expectedDomain = strtolower(trim($expectedDomain));
+    if ($host === '') {
+        return false;
+    }
+    if ($expectedDomain !== '' && ($host === $expectedDomain || str_ends_with_ci($host, '.' . $expectedDomain))) {
+        return true;
+    }
+    if (preg_match('/(?:^|\\.)shopify(?:cs|cdn|cloud)?\\.com$/', $host)) {
+        return true;
+    }
+    if (preg_match('/(?:^|\\.)myshopify\\.com$/', $host)) {
+        return true;
+    }
+    if (preg_match('/(?:^|\\.)shop\\.app$/', $host)) {
+        return true;
+    }
+    return false;
+}
+
 function extractOperationQueryFromFile(string $filePath, string $operationName): ?string {
     $content = @file_get_contents($filePath);
     if ($content === false) {
@@ -2206,7 +2238,8 @@ if (empty($minPriceProductId)) {
 }
 
 $urlbase = $site1;
-$domain = parse_url($urlbase, PHP_URL_HOST); 
+$domain = parse_url($urlbase, PHP_URL_HOST);
+$domain = is_string($domain) ? strtolower($domain) : '';
 $cookie = 'cookie_'.uniqid('', true).'.txt';
 $GLOBALS['__cookie_file'] = $cookie;
 $prodid = $minPriceProductId;
@@ -2350,6 +2383,38 @@ $checkoutToken = '';
 if (preg_match('/\/cn\/([^\/?]+)/', $checkouturl, $matches)) {
     $checkoutToken = $matches[1];
 }
+$initialDomain = $domain;
+$checkoutHost = '';
+if (!empty($finalUrl)) {
+    $parsedHost = parse_url($finalUrl, PHP_URL_HOST);
+    if (is_string($parsedHost) && $parsedHost !== '') {
+        $checkoutHost = strtolower($parsedHost);
+    }
+}
+if ($checkoutHost === '' && !empty($checkouturl)) {
+    $parsedHost = parse_url($checkouturl, PHP_URL_HOST);
+    if (is_string($parsedHost) && $parsedHost !== '') {
+        $checkoutHost = strtolower($parsedHost);
+    } elseif ($checkouturl !== '' && $checkouturl[0] === '/') {
+        $checkoutHost = $initialDomain;
+    }
+}
+if ($checkoutHost === '' && $initialDomain !== '') {
+    $checkoutHost = $initialDomain;
+}
+if ($checkoutHost === '') {
+    send_final_response([
+        'Response' => 'Unable to determine checkout host for payment session scope.',
+    ], $proxy_used, $proxy_ip, $proxy_port);
+}
+if (!is_trusted_checkout_host($checkoutHost, $initialDomain)) {
+    send_final_response([
+        'Response' => 'Checkout host mismatch detected. Aborting for safety.',
+        'CheckoutHost' => $checkoutHost,
+        'ExpectedHost' => $initialDomain,
+    ], $proxy_used, $proxy_ip, $proxy_port);
+}
+$domain = $checkoutHost;
 
 card:
 $ch = curl_init();
