@@ -1037,6 +1037,120 @@ if ($endPos === false) {
 return substr($content, $startPos, $endPos - $startPos);
 }
 
+/**
+ * Check CC BIN/host information using BIN lookup API
+ * Returns array with card info or false on failure
+ */
+function check_cc_bin(string $cc_number): array {
+    $bin = substr($cc_number, 0, 6); // First 6 digits
+    
+    // Try multiple BIN lookup APIs
+    $apis = [
+        "https://lookup.binlist.net/{$bin}",
+        "https://bins.su/api/v1/bins/{$bin}"
+    ];
+    
+    foreach ($apis as $api_url) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $api_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Accept: application/json',
+            'User-Agent: Mozilla/5.0'
+        ]);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($response !== false && $http_code == 200) {
+            $data = json_decode($response, true);
+            if ($data && is_array($data)) {
+                // Normalize the response format
+                $result = [
+                    'valid' => true,
+                    'bin' => $bin,
+                    'brand' => $data['brand'] ?? ($data['scheme'] ?? 'UNKNOWN'),
+                    'type' => $data['type'] ?? 'UNKNOWN',
+                    'country' => $data['country']['alpha2'] ?? ($data['country'] ?? 'UNKNOWN'),
+                    'country_name' => $data['country']['name'] ?? 'UNKNOWN',
+                    'bank' => $data['bank']['name'] ?? ($data['bank'] ?? 'UNKNOWN')
+                ];
+                return $result;
+            }
+        }
+    }
+    
+    // If APIs fail, do basic local validation
+    return [
+        'valid' => validate_luhn($cc_number),
+        'bin' => $bin,
+        'brand' => get_card_brand($cc_number),
+        'type' => 'UNKNOWN',
+        'country' => 'UNKNOWN',
+        'country_name' => 'UNKNOWN',
+        'bank' => 'UNKNOWN'
+    ];
+}
+
+/**
+ * Validate credit card number using Luhn algorithm
+ */
+function validate_luhn(string $number): bool {
+    $number = preg_replace('/\D/', '', $number);
+    $sum = 0;
+    $length = strlen($number);
+    
+    for ($i = 0; $i < $length; $i++) {
+        $digit = (int)$number[$length - $i - 1];
+        if ($i % 2 == 1) {
+            $digit *= 2;
+            if ($digit > 9) {
+                $digit -= 9;
+            }
+        }
+        $sum += $digit;
+    }
+    
+    return ($sum % 10 == 0);
+}
+
+/**
+ * Get card brand from card number
+ */
+function get_card_brand(string $number): string {
+    $number = preg_replace('/\D/', '', $number);
+    
+    // Visa
+    if (preg_match('/^4/', $number)) {
+        return 'VISA';
+    }
+    // Mastercard
+    if (preg_match('/^5[1-5]/', $number) || preg_match('/^2[2-7]/', $number)) {
+        return 'MASTERCARD';
+    }
+    // American Express
+    if (preg_match('/^3[47]/', $number)) {
+        return 'AMEX';
+    }
+    // Discover
+    if (preg_match('/^6(?:011|5)/', $number)) {
+        return 'DISCOVER';
+    }
+    // JCB
+    if (preg_match('/^35/', $number)) {
+        return 'JCB';
+    }
+    // Diners Club
+    if (preg_match('/^3[068]/', $number)) {
+        return 'DINERS';
+    }
+    
+    return 'UNKNOWN';
+}
+
 function extractOperationQueryFromFile(string $filePath, string $operationName): ?string {
     $content = @file_get_contents($filePath);
     if ($content === false) {
@@ -1709,6 +1823,21 @@ $cc = $cc_partes[0];
 $month = $cc_partes[1];
 $year = $cc_partes[2];
 $cvv = $cc_partes[3];
+
+// Check CC BIN/host information
+$cc_info = check_cc_bin($cc);
+if (!$cc_info['valid']) {
+    send_final_response([
+        'Response' => 'Invalid CC - Failed Luhn check',
+        'CC_Info' => $cc_info
+    ], false, '', '');
+}
+
+// Log CC information if debug is enabled
+if (isset($_GET['debug'])) {
+    error_log("[CC_CHECK] BIN: {$cc_info['bin']}, Brand: {$cc_info['brand']}, Country: {$cc_info['country_name']}, Bank: {$cc_info['bank']}");
+}
+
 /*=====  sub_month  ======*/
 $yearcont=strlen($year);
 if ($yearcont<=2){
@@ -3913,6 +4042,14 @@ $result = json_encode([
 'Price' => $totalamt,
 'Gateway' => $gateway,
 'cc' => $cc1,
+'CC_Info' => [
+    'BIN' => $cc_info['bin'],
+    'Brand' => $cc_info['brand'],
+    'Type' => $cc_info['type'],
+    'Country' => $cc_info['country'],
+    'Country_Name' => $cc_info['country_name'],
+    'Bank' => $cc_info['bank']
+]
 ]);
 send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
 exit;
@@ -3932,6 +4069,14 @@ $result_data = [
 'Price' => $totalamt,
 'Gateway' => $gateway,
 'cc' => $cc1,
+'CC_Info' => [
+    'BIN' => $cc_info['bin'],
+    'Brand' => $cc_info['brand'],
+    'Type' => $cc_info['type'],
+    'Country' => $cc_info['country'],
+    'Country_Name' => $cc_info['country_name'],
+    'Bank' => $cc_info['bank']
+]
 ];
 send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
 exit;
@@ -3951,6 +4096,14 @@ $result_data = [
 'Price' => $totalamt,
 'Gateway' => $gateway,
 'cc' => $cc1,
+'CC_Info' => [
+    'BIN' => $cc_info['bin'],
+    'Brand' => $cc_info['brand'],
+    'Type' => $cc_info['type'],
+    'Country' => $cc_info['country'],
+    'Country_Name' => $cc_info['country_name'],
+    'Bank' => $cc_info['bank']
+]
 ];
 send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
 exit;
@@ -3973,7 +4126,15 @@ $result = json_encode([
 'Response' => $err,
 'Price' => $totalamt,
 'Gateway' => $gateway,
-'cc' => $cc1
+'cc' => $cc1,
+'CC_Info' => [
+    'BIN' => $cc_info['bin'],
+    'Brand' => $cc_info['brand'],
+    'Type' => $cc_info['type'],
+    'Country' => $cc_info['country'],
+    'Country_Name' => $cc_info['country_name'],
+    'Bank' => $cc_info['bank']
+]
 ]);
 // Log all other error responses to Telegram
 if ($err != 'incorrect_zip') {
