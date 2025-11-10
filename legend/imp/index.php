@@ -486,10 +486,71 @@ function h($value): string
             margin-top: 12px;
         }
 
+        .gateway-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .gateway-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .gateway-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .gateway-badge.stripe { background: linear-gradient(135deg, #635bff 0%, #0a2540 100%); }
+        .gateway-badge.paypal { background: linear-gradient(135deg, #003087 0%, #009cde 100%); }
+        .gateway-badge.razorpay { background: linear-gradient(135deg, #3395ff 0%, #0066cc 100%); }
+        .gateway-badge.payu { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); }
+        .gateway-badge.woocommerce { background: linear-gradient(135deg, #96588a 0%, #7c3aed 100%); }
+
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.2s; }
+        .card:nth-child(3) { animation-delay: 0.3s; }
+        .card:nth-child(4) { animation-delay: 0.4s; }
+        .card:nth-child(5) { animation-delay: 0.5s; }
+
         @media (max-width: 768px) {
             .btn {
                 width: 100%;
                 margin-right: 0;
+            }
+            .gateway-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             }
         }
     </style>
@@ -628,18 +689,27 @@ if ('serviceWorker' in navigator) {
 
         <div class="card">
             <h2>💳 Payment Gateway Recon</h2>
-            <p>Autonomous gateway fingerprinting &amp; card orchestration with on-the-fly captcha mitigation.</p>
+            <p>Autonomous gateway fingerprinting &amp; card orchestration with on-the-fly captcha mitigation. Supports <strong>50+ payment gateways</strong> including WooCommerce, Stripe, Razorpay, PayU, and more.</p>
             <a href="test_proxy_system.php" class="btn btn-success" target="_blank">📡 Run Gateway Suite</a>
             <a href="autosh.php?cc=4111111111111111|12|2027|123&amp;site=https://example.myshopify.com" class="btn btn-warning" target="_blank">⚙️ Execute autosh</a>
+            <a href="autosh.php?cc=4111111111111111|12|2027|123&amp;site=https://example.com/checkout" class="btn" target="_blank">🛒 WooCommerce Test</a>
             <div class="code-block">
 curl https://localhost/autosh.php?cc=...<br>
   &amp;site=https://example.myshopify.com<br>
   &amp;rotate=1&amp;country=us&amp;format=json
             </div>
-            <div class="info-box" style="background:#fef3c7;border-left-color:#f59e0b;">
-                <h3>Gateway Coverage Highlights</h3>
-                <p>Stripe, PayPal/Braintree, Adyen, Checkout.com, Worldpay, Authorize.Net, PayU, Razorpay, Square, Klarna, Afterpay/Clearpay, Affirm, Cybersource, MercadoPago, Amazon Pay, PhonePe, Paytm &amp; more.</p>
-                <p>Instant JSON intelligence: risk hints, card-flow support, 3DS requirement flags, and proxy provenance.</p>
+            <div class="info-box" style="background:#fef3c7;border-left-color:#f59e0b; margin-top:15px;">
+                <h3>🎯 Supported Payment Gateways (50+)</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px; margin-top:10px;">
+                    <div><strong>Major Gateways:</strong> Stripe, PayPal, Razorpay, PayU, Adyen, Square</div>
+                    <div><strong>WooCommerce:</strong> WC Stripe, WC PayPal, WC Razorpay, WC PayU</div>
+                    <div><strong>Regional:</strong> PayU Latam, PayU Poland, PayU Romania, PayU Turkey</div>
+                    <div><strong>Indian:</strong> Razorpay, PayU Money, Paytm, PhonePe, Cashfree, Instamojo, CCAvenue</div>
+                    <div><strong>Brazil:</strong> PagSeguro, Pagar.me, EBANX</div>
+                    <div><strong>Europe:</strong> Mollie, Redsys, Paytrail, Klarna, Afterpay</div>
+                    <div><strong>Others:</strong> 2Checkout, PayFast, PayHere, PayGate, dLocal, Payoneer, Authorize.Net, Worldpay, Cybersource, MercadoPago, Amazon Pay, Skrill, Alipay, WePay, Global Payments, Paystack, Iyzipay, Affirm</div>
+                </div>
+                <p style="margin-top:12px;"><strong>Features:</strong> Instant JSON intelligence, risk hints, card-flow support, 3DS requirement flags, proxy provenance, and real-time gateway detection.</p>
             </div>
         </div>
 
@@ -705,11 +775,17 @@ START_SERVER.bat # Windows
     </div>
 
     <div class="info-box" style="background:#fff7ed;border-left-color:#fb923c;">
-        <h3>🧭 Using autosh.php</h3>
-        <p><strong>Direct hit:</strong></p>
+        <h3>🧭 Using autosh.php - Multi-Gateway Support</h3>
+        <p><strong>Shopify Store:</strong></p>
         <div class="code-block">
 autosh.php?cc=4111111111111111|12|2028|123<br>
   &amp;site=https://example.myshopify.com
+        </div>
+        <p><strong>WooCommerce Store:</strong></p>
+        <div class="code-block">
+autosh.php?cc=4111111111111111|12|2028|123<br>
+  &amp;site=https://example.com/checkout<br>
+  &amp;gateway=woocommerce
         </div>
         <p><strong>Rotating proxy + country pinning:</strong></p>
         <div class="code-block">
@@ -719,6 +795,7 @@ autosh.php?...&amp;rotate=1&amp;country=us&amp;requireProxy=1
         <div class="code-block">
 autosh.php?...&amp;cto=4&amp;to=20&amp;v4=1&amp;format=json
         </div>
+        <p style="margin-top:12px;"><strong>✨ New Features:</strong> Automatic gateway detection for WooCommerce, Stripe, Razorpay, PayU, and 50+ other gateways. Real-time gateway identification with confidence scores and feature detection.</p>
     </div>
 
     <div class="card" style="margin-top:24px;">
@@ -726,10 +803,46 @@ autosh.php?...&amp;cto=4&amp;to=20&amp;v4=1&amp;format=json
         <p style="color:#4a5568; font-size:13px;">
             <strong>ProxyManager.php</strong> &ndash; Rotation engine with health tracking<br>
             <strong>fetch_proxies.php</strong> &ndash; High-speed scraping + validation<br>
-            <strong>autosh.php</strong> &ndash; Shopfiy-native multi-gateway executor<br>
+            <strong>autosh.php</strong> &ndash; Multi-platform executor (Shopify, WooCommerce, 50+ gateways)<br>
             <strong>proxy_cache_refresh.php</strong> &ndash; Scheduled pruning<br>
             <strong>test_proxy_system.php</strong> &ndash; End-to-end diagnostics<br>
             <strong>SETUP_GUIDE.txt</strong> &ndash; Fast start companion
+        </p>
+    </div>
+
+    <div class="card" style="margin-top:24px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);">
+        <h2>🎯 Gateway Detection Showcase</h2>
+        <p>Real-time detection of payment gateways with confidence scoring and feature analysis.</p>
+        <div class="gateway-grid">
+            <div class="gateway-badge stripe">Stripe</div>
+            <div class="gateway-badge paypal">PayPal</div>
+            <div class="gateway-badge razorpay">Razorpay</div>
+            <div class="gateway-badge payu">PayU</div>
+            <div class="gateway-badge woocommerce">WooCommerce</div>
+            <div class="gateway-badge">Adyen</div>
+            <div class="gateway-badge">Square</div>
+            <div class="gateway-badge">Authorize.Net</div>
+            <div class="gateway-badge">Worldpay</div>
+            <div class="gateway-badge">Checkout.com</div>
+            <div class="gateway-badge">Mollie</div>
+            <div class="gateway-badge">Paystack</div>
+            <div class="gateway-badge">Paytm</div>
+            <div class="gateway-badge">PhonePe</div>
+            <div class="gateway-badge">Cashfree</div>
+            <div class="gateway-badge">CCAvenue</div>
+            <div class="gateway-badge">Klarna</div>
+            <div class="gateway-badge">Afterpay</div>
+            <div class="gateway-badge">MercadoPago</div>
+            <div class="gateway-badge">Amazon Pay</div>
+            <div class="gateway-badge">2Checkout</div>
+            <div class="gateway-badge">PayFast</div>
+            <div class="gateway-badge">dLocal</div>
+            <div class="gateway-badge">PagSeguro</div>
+            <div class="gateway-badge">Redsys</div>
+            <div class="gateway-badge">+25 More</div>
+        </div>
+        <p style="margin-top:15px; font-size:12px; color:#666;">
+            <strong>Detection Features:</strong> Automatic gateway identification, confidence scoring, 3DS requirement detection, card network support, feature analysis, and multi-gateway support detection.
         </p>
     </div>
 </div>
