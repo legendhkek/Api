@@ -10,10 +10,19 @@ A professional-grade proxy management system with ML-based quality scoring, auto
 
 ### Core Features
 - ✅ **Advanced Proxy Management** - Automatic rotation, health checking, quality scoring
+- ✅ **50+ Payment Gateway Support** - Stripe, PayPal, Razorpay, PayU, WooCommerce, Shopify, and 40+ more
+- ✅ **E-Commerce Platform Detection** - Automatic detection for Shopify, WooCommerce, Magento, BigCommerce, etc.
 - ✅ **ML-Based Quality Scoring** - Intelligent proxy ranking (uptime, speed, reliability)
 - ✅ **Auto-Fetch System** - Automatically fetch proxies when needed
 - ✅ **Multi-Protocol Support** - HTTP, HTTPS, SOCKS4, SOCKS5
 - ✅ **200× Concurrent Testing** - Ultra-fast proxy validation
+
+### Payment Gateway Intelligence
+- ✅ **50+ Gateways Supported** - Major, regional, BNPL, and crypto payment gateways
+- ✅ **Automatic Detection** - Intelligent gateway identification from HTML/JS
+- ✅ **Multi-Gateway Support** - Detects multiple gateways on same page
+- ✅ **Rich Metadata** - Card networks, 3DS support, features, funding types
+- ✅ **Confidence Scoring** - 0-1 confidence level for each detected gateway
 
 ### Advanced Captcha Solving
 - ✅ **Math Captchas** - Automatic solving (< 1ms)
@@ -732,7 +741,7 @@ ws.send(JSON.stringify({ type: 'get_analytics' }));
 ## 🎯 Use Cases
 
 ### 1. E-Commerce Testing
-Test Shopify/WooCommerce stores with rotating proxies and automatic captcha solving.
+Test 50+ payment gateways across Shopify, WooCommerce, Magento, and other platforms with rotating proxies and automatic captcha solving.
 
 ### 2. Web Scraping
 Rotate through high-quality proxies with ML-based selection for optimal performance.
@@ -748,12 +757,38 @@ Route traffic through rotating proxies for enhanced privacy.
 
 ---
 
+## 🔐 Supported Payment Gateways
+
+### Major Gateways
+Stripe • PayPal/Braintree • Razorpay • PayU • Adyen • Checkout.com • Authorize.Net • Square
+
+### E-Commerce Platforms
+WooCommerce • Shopify • Magento • BigCommerce • PrestaShop • OpenCart
+
+### Regional Gateways
+**India:** Paytm, PhonePe, Cashfree, Instamojo, CCAvenue, BillDesk  
+**Africa:** Flutterwave, Paystack, PayFast  
+**Latin America:** Mercado Pago  
+**Europe:** Mollie, iyzipay, SagePay/Opayo  
+**Global:** 2Checkout, BluePay, Paysafe, NMI, Elavon, Payoneer
+
+### Alternative Payment Methods
+**BNPL:** Klarna, Afterpay/Clearpay, Affirm  
+**Crypto:** Coinbase Commerce, BitPay  
+**Digital Wallets:** Amazon Pay, Skrill, Alipay, WePay
+
+### Enterprise Solutions
+Cybersource • Worldpay • Global Payments/TSYS • PayPal Payflow
+
+**Total: 50+ Gateways and Platforms Supported!**
+
 ## 📞 Support & Contributing
 
 ### Getting Help
 - Check troubleshooting section
 - Review API documentation
 - Run test suite: `http://localhost/test_improvements.php`
+- Access advanced dashboard: `http://localhost:8000/`
 
 ### Feature Requests
 - Document the feature needed
