@@ -2350,6 +2350,23 @@ $checkoutToken = '';
 if (preg_match('/\/cn\/([^\/?]+)/', $checkouturl, $matches)) {
     $checkoutToken = $matches[1];
 }
+$checkoutHost = $checkouturl !== '' ? parse_url($checkouturl, PHP_URL_HOST) : '';
+
+// Pre-compute expected hosts for payment session scope validation
+$expectedPaymentScopes = [];
+foreach ([$domain, $checkoutHost, parse_url($site1, PHP_URL_HOST)] as $candidateHost) {
+    if (!is_string($candidateHost) || $candidateHost === '') {
+        continue;
+    }
+    $expectedPaymentScopes[] = strtolower($candidateHost);
+    // If host is not already a myshopify domain, add a sanitized .myshopify.com variant
+    if (stripos($candidateHost, '.myshopify.com') === false) {
+        $sanitized = preg_replace('/[^a-z0-9]+/i', '-', $candidateHost);
+        if (is_string($sanitized) && $sanitized !== '') {
+            $expectedPaymentScopes[] = strtolower($sanitized.'.myshopify.com');
+        }
+    }
+}
 
 card:
 $ch = curl_init();
@@ -2395,6 +2412,37 @@ if ($curlErr) {
 }
 }
 $response2js = json_decode($response2, true);
+$paymentSessionScope = isset($response2js['payment_session_scope'])
+    ? strtolower((string)$response2js['payment_session_scope'])
+    : '';
+$scopeNormalized = preg_replace('/[^a-z0-9]+/i', '', $paymentSessionScope);
+$scopeMatches = empty($expectedPaymentScopes);
+if ($paymentSessionScope === '' || $scopeNormalized === '') {
+    $scopeMatches = false;
+} else {
+    foreach (array_unique($expectedPaymentScopes) as $expectedScope) {
+        $expectedScope = strtolower($expectedScope);
+        $expectedSlug = preg_replace('/[^a-z0-9]+/i', '', $expectedScope);
+        if ($paymentSessionScope === $expectedScope) {
+            $scopeMatches = true;
+            break;
+        }
+        if ($expectedSlug !== '' && strpos($scopeNormalized, $expectedSlug) === 0) {
+            $scopeMatches = true;
+            break;
+        }
+    }
+}
+
+if (!$scopeMatches) {
+    $err = 'Payment session scope mismatch for host '.$paymentSessionScope;
+    $result_data = [
+        'Response' => $err,
+        'ExpectedScope' => array_values(array_unique($expectedPaymentScopes)),
+        'Price'=> $minPrice,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
 $cctoken = $response2js['id'];
 if (empty($cctoken)) {
     if ($retryCount < $maxRetries) {
@@ -2447,6 +2495,21 @@ curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
     'Expect:',
 ]);
 $proposalQuery = extractOperationQueryFromFile('jsonp.php', 'Proposal');
+$submitForCompletionQuery = extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion');
+if ($proposalQuery === null || $submitForCompletionQuery === null) {
+    $missing = [];
+    if ($proposalQuery === null) {
+        $missing[] = 'Proposal';
+    }
+    if ($submitForCompletionQuery === null) {
+        $missing[] = 'SubmitForCompletion';
+    }
+    $err = 'Missing GraphQL definition(s) in jsonp.php: '.implode(', ', $missing);
+    $result_data = [
+        'Response' => $err,
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
 $proposalPayload = [
         'query' => $proposalQuery,
         'variables' => [
@@ -2817,7 +2880,7 @@ if (empty($handle)) {
 //]);
 //    echo $resultg;
 if ($totalamt == '10.98' && $currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => $submitForCompletionQuery,
                 'variables' => [
                     'input' => [
                         'sessionInput' => [
@@ -3017,7 +3080,7 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
             ]);
 }
 elseif ($currencycode == 'USD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => $submitForCompletionQuery,
             'variables' => [
                 'input' => [
                     'sessionInput' => [
@@ -3234,7 +3297,7 @@ elseif ($currencycode == 'USD') {
         ]);    
 } 
 elseif ($currencycode == 'NZD') {
-    $postf = json_encode(['query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),
+    $postf = json_encode(['query' => $submitForCompletionQuery,
         'variables' => [
             'input' => [
                 'sessionInput' => [
@@ -3436,7 +3499,7 @@ elseif ($currencycode == 'NZD') {
 }
 
  else {$postf = json_encode([
- 'query' => extractOperationQueryFromFile('jsonp.php', 'SubmitForCompletion'),  
+'query' => $submitForCompletionQuery,  
          'variables' => [
              'input' => [
                  'sessionInput' => [
@@ -3750,10 +3813,16 @@ elseif ($currencycode == 'NZD') {
  }
 
  
- 
  poll:
- $postf2 = json_encode([
-     'query' => extractOperationQueryFromFile('jsonp.php', 'PollForReceipt'),
+$pollForReceiptQuery = extractOperationQueryFromFile('jsonp.php', 'PollForReceipt');
+if ($pollForReceiptQuery === null) {
+    $result_data = [
+        'Response' => 'Missing PollForReceipt query in jsonp.php',
+    ];
+    send_final_response($result_data, $proxy_used, $proxy_ip, $proxy_port);
+}
+$postf2 = json_encode([
+    'query' => $pollForReceiptQuery,
      'variables' => [
          'receiptId' => $recipt_id,
          'sessionToken' => $x_checkout_one_session_token
