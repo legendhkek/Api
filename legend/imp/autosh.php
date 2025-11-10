@@ -1694,52 +1694,111 @@ if (!$noproxy_requested && !$proxy_used && $require_proxy) {
 }
 
 
+if (!function_exists('cc_validation_error')) {
+    function cc_validation_error(string $message, array $extra = []): void {
+        http_response_code(400);
+        $payload = array_merge([
+            'Response' => $message,
+            'Valid' => false,
+            'ErrorType' => 'cc_validation',
+        ], $extra);
+        send_final_response($payload, false, '', '');
+    }
+}
+
+if (!function_exists('cc_passes_luhn')) {
+    function cc_passes_luhn(string $number): bool {
+        $sum = 0;
+        $alternate = false;
+        for ($i = strlen($number) - 1; $i >= 0; $i--) {
+            $n = (int) $number[$i];
+            if ($alternate) {
+                $n *= 2;
+                if ($n > 9) {
+                    $n -= 9;
+                }
+            }
+            $sum += $n;
+            $alternate = !$alternate;
+        }
+        return $sum % 10 === 0;
+    }
+}
+
 // Validate CC parameter
-if (!isset($_GET['cc']) || empty($_GET['cc'])) {
-    send_final_response(['Response' => 'CC parameter is required'], false, '', '');
+$ccRaw = request_string('cc');
+if ($ccRaw === '') {
+    cc_validation_error('CC parameter is required. Provide value as cc|month|year|cvv', ['Field' => 'cc']);
 }
 
-$cc1 = $_GET['cc'];
-$cc_partes = explode("|", $cc1);
-
-if (count($cc_partes) < 4) {
-    send_final_response(['Response' => 'Invalid CC format. Use: cc|month|year|cvv'], false, '', '');
+$ccParts = array_map('trim', explode('|', $ccRaw));
+if (count($ccParts) < 4) {
+    cc_validation_error('Invalid CC format. Use: cc|month|year|cvv');
 }
 
-$cc = $cc_partes[0];
-$month = $cc_partes[1];
-$year = $cc_partes[2];
-$cvv = $cc_partes[3];
-/*=====  sub_month  ======*/
-$yearcont=strlen($year);
-if ($yearcont<=2){
-$year = "20$year";
+$cardNumber = str_replace([' ', '-'], '', $ccParts[0]);
+if ($cardNumber === '' || !ctype_digit($cardNumber)) {
+    cc_validation_error('Card number must contain digits only.');
 }
-if($month == "01"){
-$sub_month = "1";
-}elseif($month == "02"){
-$sub_month = "2";
-}elseif($month == "03"){
-$sub_month = "3";
-}elseif($month == "04"){
-$sub_month = "4";
-}elseif($month == "05"){
-$sub_month = "5";
-}elseif($month == "06"){
-$sub_month = "6";
-}elseif($month == "07"){
-$sub_month = "7";
-}elseif($month == "08"){
-$sub_month = "8";
-}elseif($month == "09"){
-$sub_month = "9";
-}elseif($month == "10"){
-$sub_month = "10";
-}elseif($month == "11"){
-$sub_month = "11";
-}elseif($month == "12"){
-$sub_month = "12";
+$cardLength = strlen($cardNumber);
+if ($cardLength < 12 || $cardLength > 19) {
+    cc_validation_error('Card number length must be between 12 and 19 digits.');
 }
+if (!cc_passes_luhn($cardNumber)) {
+    cc_validation_error('Card number failed Luhn checksum validation.');
+}
+
+$monthDigits = preg_replace('/\D+/', '', $ccParts[1]);
+$monthDigits = $monthDigits === null ? '' : $monthDigits;
+if ($monthDigits === '') {
+    cc_validation_error('Expiration month is required and must be numeric.');
+}
+$monthInt = (int) $monthDigits;
+if ($monthInt < 1 || $monthInt > 12) {
+    cc_validation_error('Expiration month must be between 1 and 12.');
+}
+$month = str_pad((string) $monthInt, 2, '0', STR_PAD_LEFT);
+$sub_month = $monthInt;
+
+$yearDigits = preg_replace('/\D+/', '', $ccParts[2]);
+$yearDigits = $yearDigits === null ? '' : $yearDigits;
+if ($yearDigits === '') {
+    cc_validation_error('Expiration year is required and must be numeric.');
+}
+$yearLength = strlen($yearDigits);
+if ($yearLength !== 2 && $yearLength !== 4) {
+    cc_validation_error('Expiration year must be 2 or 4 digits.');
+}
+$currentYear = (int) date('Y');
+$currentMonth = (int) date('n');
+if ($yearLength === 2) {
+    $yearInt = (int) $yearDigits;
+    $century = $currentYear - ($currentYear % 100);
+    $yearInt += $century;
+    if ($yearInt < $currentYear) {
+        $yearInt += 100;
+    }
+} else {
+    $yearInt = (int) $yearDigits;
+}
+if ($yearInt < $currentYear || ($yearInt === $currentYear && $monthInt < $currentMonth)) {
+    cc_validation_error('Card is expired.');
+}
+if ($yearInt > $currentYear + 25) {
+    cc_validation_error('Expiration year is out of reasonable range.');
+}
+$year = (string) $yearInt;
+
+$cvvDigits = preg_replace('/\D+/', '', $ccParts[3]);
+$cvvDigits = $cvvDigits === null ? '' : $cvvDigits;
+if ($cvvDigits === '') {
+    cc_validation_error('CVV is required and must be numeric.');
+}
+$cvvLength = strlen($cvvDigits);
+if ($cvvLength < 3 || $cvvLength > 4) {
+    cc_validation_error('CVV length must be 3 or 4 digits.');
+}
+$cvv = $cvvDigits;
 
 $geoaddressParts = array_filter([
     $num_us !== '' ? $num_us : null,
