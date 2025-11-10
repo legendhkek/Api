@@ -115,3 +115,23 @@
 [2025-10-21 07:46:27] Loaded 57 proxies from file
 [2025-10-21 07:48:26] Loaded 57 proxies from file
 [2025-10-21 07:49:25] Loaded 57 proxies from file
+[2025-11-10 15:01:17] Loaded 57 proxies from file
+[2025-11-10 15:03:29] Loaded 57 proxies from file
+[2025-11-10 15:03:42] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 15:03:42] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 15:03:46] ✓ Proxy health check passed: http://219.65.73.81:80 (3.8720910549164s)
+[2025-11-10 15:03:52] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.69323778152466s)
+[2025-11-10 15:06:02] Loaded 57 proxies from file
+[2025-11-10 15:06:06] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 15:06:06] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 15:06:11] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 15:06:11] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 15:06:12] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.70111703872681s)
+[2025-11-10 15:06:14] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (0.68338012695312s)
+[2025-11-10 15:06:17] ✓ Proxy health check passed: socks5://199.102.106.94:4145 (0.35973691940308s)
+[2025-11-10 15:06:23] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 15:06:23] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-10 15:06:23] ✓ Proxy health check passed: socks4://72.195.34.60:27391 (0.57969784736633s)
+[2025-11-10 15:06:24] ✓ Proxy health check passed: socks4://192.111.138.29:4145 (0.48992800712585s)
+[2025-11-10 15:06:28] ✓ Proxy health check passed: socks4://49.0.246.130:443 (4.3821518421173s)
+[2025-11-10 15:06:33] ✓ Proxy health check passed: socks4://192.111.134.10:4145 (0.32167291641235s)
