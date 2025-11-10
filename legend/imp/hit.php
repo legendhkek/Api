@@ -1,9 +1,10 @@
 <?php
 /**
- * HIT.PHP - Advanced CC Checker with Custom Address & Proxy Rotation
+ * HIT.PHP - Advanced CC Checker with Complete Customer Details
  * 
  * Features:
- * - Custom address input for every check
+ * - Complete customer information (name, email, phone, address, etc.)
+ * - Currency and country selection
  * - Automatic proxy rotation like autosh.php
  * - Support for multiple CC checking
  * - Gateway auto-detection
@@ -31,6 +32,8 @@ $start_time = microtime(true);
 // Load required dependencies
 require_once __DIR__ . '/ProxyManager.php';
 require_once __DIR__ . '/ho.php';
+require_once __DIR__ . '/add.php';
+require_once __DIR__ . '/no.php';
 
 // Initialize User Agent
 $agent = new userAgent();
@@ -54,138 +57,152 @@ $debug = isset($_GET['debug']);
 $ROTATE_PROXY = !isset($_GET['proxy']) && (!isset($_GET['rotate']) || $_GET['rotate'] !== '0');
 
 // ============================================
-// ADDRESS HANDLING
+// CUSTOMER DATA GENERATORS
 // ============================================
 
 /**
- * Parse address input from various formats
+ * Generate random first name
  */
-function parseAddressInput($input) {
-    if (empty($input)) {
-        return null;
-    }
-    
-    // Try JSON format first
-    $json = json_decode($input, true);
-    if ($json && isset($json['address1'])) {
-        return [
-            'numd' => $json['numd'] ?? '',
-            'address1' => $json['address1'] ?? '',
-            'address2' => $json['address2'] ?? '',
-            'city' => $json['city'] ?? '',
-            'state' => $json['state'] ?? '',
-            'zip' => $json['zip'] ?? '',
-            'country' => $json['country'] ?? 'US'
-        ];
-    }
-    
-    // Try comma-separated format: "123 Main St, New York, NY, 10001"
-    $parts = array_map('trim', explode(',', $input));
-    if (count($parts) >= 3) {
-        return [
-            'numd' => '',
-            'address1' => $parts[0] ?? '',
-            'address2' => '',
-            'city' => $parts[1] ?? '',
-            'state' => $parts[2] ?? '',
-            'zip' => $parts[3] ?? '',
-            'country' => 'US'
-        ];
-    }
-    
-    // Try pipe-separated format: "123|Main St|New York|NY|10001"
-    $parts = array_map('trim', explode('|', $input));
-    if (count($parts) >= 4) {
-        return [
-            'numd' => $parts[0] ?? '',
-            'address1' => $parts[1] ?? '',
-            'address2' => '',
-            'city' => $parts[2] ?? '',
-            'state' => $parts[3] ?? '',
-            'zip' => $parts[4] ?? '',
-            'country' => 'US'
-        ];
-    }
-    
-    return null;
-}
-
-/**
- * Get random address from add.php
- */
-function getRandomAddress() {
-    if (file_exists(__DIR__ . '/add.php')) {
-        require_once __DIR__ . '/add.php';
-        $addr = AddressProvider::getRandomAddress();
-        return [
-            'numd' => $addr['numd'],
-            'address1' => $addr['address1'],
-            'address2' => '',
-            'city' => $addr['city'],
-            'state' => $addr['state'],
-            'zip' => $addr['zip'],
-            'country' => 'US'
-        ];
-    }
-    
-    // Fallback default address
-    return [
-        'numd' => '350',
-        'address1' => '5th Ave',
-        'address2' => '',
-        'city' => 'New York',
-        'state' => 'NY',
-        'zip' => '10118',
-        'country' => 'US'
+function generateFirstName() {
+    $names = [
+        'James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles',
+        'Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen',
+        'Christopher', 'Daniel', 'Matthew', 'Anthony', 'Mark', 'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua',
+        'Nancy', 'Lisa', 'Betty', 'Margaret', 'Sandra', 'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle',
+        'Kevin', 'Brian', 'George', 'Edward', 'Ronald', 'Timothy', 'Jason', 'Jeffrey', 'Ryan', 'Jacob'
     ];
+    return $names[array_rand($names)];
 }
 
 /**
- * Format address for display
+ * Generate random last name
  */
-function formatAddressDisplay($addr) {
-    $line1 = trim($addr['numd'] . ' ' . $addr['address1']);
-    $line2 = $addr['address2'] ? $addr['address2'] . ', ' : '';
-    return $line1 . ($line2 ? "\n" . $line2 : '') . "\n" . 
-           $addr['city'] . ', ' . $addr['state'] . ' ' . $addr['zip'];
+function generateLastName() {
+    $names = [
+        'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+        'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
+        'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
+        'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores',
+        'Green', 'Adams', 'Nelson', 'Baker', 'Hall', 'Rivera', 'Campbell', 'Mitchell', 'Carter', 'Roberts'
+    ];
+    return $names[array_rand($names)];
 }
 
-// Determine address to use
-$address = null;
-$address_source = 'none';
+/**
+ * Generate random email
+ */
+function generateEmail($firstName = null, $lastName = null) {
+    if (!$firstName) $firstName = generateFirstName();
+    if (!$lastName) $lastName = generateLastName();
+    
+    $domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com', 'proton.me'];
+    $domain = $domains[array_rand($domains)];
+    
+    $patterns = [
+        strtolower($firstName . $lastName),
+        strtolower($firstName . '.' . $lastName),
+        strtolower($firstName) . rand(100, 999),
+        strtolower(substr($firstName, 0, 1) . $lastName),
+        strtolower($firstName . '_' . $lastName)
+    ];
+    
+    $username = $patterns[array_rand($patterns)];
+    return $username . '@' . $domain;
+}
 
-if (isset($_GET['address']) && !empty($_GET['address'])) {
-    // Custom address provided
-    $address = parseAddressInput($_GET['address']);
-    $address_source = 'custom';
-} elseif (isset($_POST['address']) && !empty($_POST['address'])) {
-    // Custom address from POST
-    $address = parseAddressInput($_POST['address']);
-    $address_source = 'custom';
-} elseif (isset($_GET['state']) && !empty($_GET['state'])) {
-    // Get address by state
-    if (file_exists(__DIR__ . '/add.php')) {
-        require_once __DIR__ . '/add.php';
-        $addr = AddressProvider::getAddressByState($_GET['state']);
-        if ($addr) {
-            $address = [
-                'numd' => $addr['numd'],
-                'address1' => $addr['address1'],
-                'address2' => '',
-                'city' => $addr['city'],
-                'state' => $addr['state'],
-                'zip' => $addr['zip'],
-                'country' => 'US'
-            ];
-            $address_source = 'state:' . $_GET['state'];
+/**
+ * Generate random phone number
+ */
+function generatePhone($country = 'US') {
+    global $areaCodes;
+    
+    if ($country === 'US') {
+        $areaCode = $areaCodes[array_rand($areaCodes)];
+        return sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+    }
+    
+    // Default US format
+    return sprintf("+1%d%03d%04d", 212, rand(200, 999), rand(1000, 9999));
+}
+
+// ============================================
+// CUSTOMER DETAILS HANDLING
+// ============================================
+
+/**
+ * Parse customer details from input
+ */
+function parseCustomerDetails($input) {
+    $details = [];
+    
+    // Handle JSON format
+    if (is_string($input)) {
+        $json = json_decode($input, true);
+        if ($json && is_array($json)) {
+            $input = $json;
         }
     }
+    
+    // Get or generate each field
+    $details['first_name'] = $input['first_name'] ?? $input['firstName'] ?? generateFirstName();
+    $details['last_name'] = $input['last_name'] ?? $input['lastName'] ?? generateLastName();
+    $details['email'] = $input['email'] ?? generateEmail($details['first_name'], $details['last_name']);
+    $details['phone'] = $input['phone'] ?? $input['phone_number'] ?? generatePhone($input['country'] ?? 'US');
+    $details['cardholder_name'] = $input['cardholder_name'] ?? $input['cardholderName'] ?? 
+                                  ($details['first_name'] . ' ' . $details['last_name']);
+    
+    // Address details
+    $details['street_address'] = $input['street_address'] ?? $input['streetAddress'] ?? $input['address1'] ?? '';
+    $details['city'] = $input['city'] ?? '';
+    $details['state'] = $input['state'] ?? $input['province'] ?? '';
+    $details['postal_code'] = $input['postal_code'] ?? $input['postalCode'] ?? $input['zip'] ?? '';
+    $details['country'] = strtoupper($input['country'] ?? 'US');
+    $details['currency'] = strtoupper($input['currency'] ?? 'USD');
+    
+    return $details;
 }
 
-// If no address specified and CC provided, generate random
-if (!$address && (isset($_GET['cc']) || isset($_POST['cc']))) {
-    $address = getRandomAddress();
-    $address_source = 'random';
+/**
+ * Get customer details with auto-generation
+ */
+function getCustomerDetails($request) {
+    // Merge GET and POST
+    $input = array_merge($_GET, $_POST);
+    
+    // Check if any customer detail is provided
+    $provided_fields = ['first_name', 'firstName', 'last_name', 'lastName', 'email', 'phone', 
+                        'street_address', 'streetAddress', 'city', 'state', 'postal_code', 'zip'];
+    
+    $has_custom = false;
+    foreach ($provided_fields as $field) {
+        if (!empty($input[$field])) {
+            $has_custom = true;
+            break;
+        }
+    }
+    
+    if ($has_custom) {
+        return parseCustomerDetails($input);
+    }
+    
+    // Generate from random address if available
+    $addr = AddressProvider::getRandomAddress();
+    $firstName = generateFirstName();
+    $lastName = generateLastName();
+    
+    return [
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'email' => generateEmail($firstName, $lastName),
+        'phone' => generatePhone('US'),
+        'cardholder_name' => $firstName . ' ' . $lastName,
+        'street_address' => $addr['numd'] . ' ' . $addr['address1'],
+        'city' => $addr['city'],
+        'state' => $addr['state'],
+        'postal_code' => $addr['zip'],
+        'country' => 'US',
+        'currency' => 'USD'
+    ];
 }
 
 // ============================================
@@ -256,15 +273,12 @@ $cc_source = 'none';
 
 if (isset($_GET['cc'])) {
     $cc_input = $_GET['cc'];
-    // Support multiple cards separated by newline or semicolon
     $cc_lines = preg_split('/[\r\n;]+/', $cc_input);
     foreach ($cc_lines as $line) {
         $line = trim($line);
         if (empty($line)) continue;
         $card = parseCreditCard($line);
-        if ($card) {
-            $cards[] = $card;
-        }
+        if ($card) $cards[] = $card;
     }
     $cc_source = 'get';
 } elseif (isset($_POST['cc'])) {
@@ -274,20 +288,16 @@ if (isset($_GET['cc'])) {
         $line = trim($line);
         if (empty($line)) continue;
         $card = parseCreditCard($line);
-        if ($card) {
-            $cards[] = $card;
-        }
+        if ($card) $cards[] = $card;
     }
     $cc_source = 'post';
 }
 
-// ============================================
-// SITE/GATEWAY HANDLING
-// ============================================
+// Get customer details
+$customer = getCustomerDetails($_REQUEST);
 
+// Get site
 $site = isset($_GET['site']) ? trim($_GET['site']) : (isset($_POST['site']) ? trim($_POST['site']) : '');
-
-// Parse site URL
 if ($site && !preg_match('/^https?:\/\//i', $site)) {
     $site = 'https://' . $site;
 }
@@ -297,16 +307,24 @@ if ($site && !preg_match('/^https?:\/\//i', $site)) {
 // ============================================
 
 /**
- * Perform CC check with address and proxy rotation
+ * Perform CC check with complete customer details
  */
-function performCheck($card, $address, $site, $pm, $ua, $rotate_proxy, $debug) {
+function performCheck($card, $customer, $site, $pm, $ua, $rotate_proxy, $debug) {
     global $ROTATE_PROXY;
     
     $result = [
         'success' => false,
         'card' => $card['number'],
         'brand' => $card['brand'],
-        'address' => formatAddressDisplay($address),
+        'customer' => [
+            'name' => $customer['first_name'] . ' ' . $customer['last_name'],
+            'email' => $customer['email'],
+            'phone' => $customer['phone'],
+            'address' => $customer['street_address'] . ', ' . $customer['city'] . ', ' . 
+                        $customer['state'] . ' ' . $customer['postal_code'],
+            'country' => $customer['country'],
+            'currency' => $customer['currency']
+        ],
         'site' => $site,
         'message' => '',
         'gateway' => 'Unknown',
@@ -394,7 +412,8 @@ function performCheck($card, $address, $site, $pm, $ua, $rotate_proxy, $debug) {
             $result['debug'] = [
                 'http_code' => $http_code,
                 'response_length' => strlen($response),
-                'gateway_details' => $gateway
+                'gateway_details' => $gateway,
+                'customer_used' => $customer
             ];
         }
         
@@ -517,9 +536,9 @@ function analyzeResponse($response, $http_code) {
 $results = [];
 $execution_time = 0;
 
-if (!empty($cards) && $address && $site) {
+if (!empty($cards) && $site) {
     foreach ($cards as $card) {
-        $result = performCheck($card, $address, $site, $pm, $ua, $ROTATE_PROXY, $debug);
+        $result = performCheck($card, $customer, $site, $pm, $ua, $ROTATE_PROXY, $debug);
         $results[] = $result;
         
         // Small delay between checks to avoid rate limiting
@@ -541,8 +560,7 @@ if ($output_format === 'json') {
         'success' => !empty($results),
         'count' => count($results),
         'results' => $results,
-        'address_used' => $address ? formatAddressDisplay($address) : null,
-        'address_source' => $address_source,
+        'customer_details' => $customer,
         'proxy_rotation' => $ROTATE_PROXY,
         'proxies_loaded' => $proxy_count,
         'execution_time_ms' => $execution_time,
@@ -560,7 +578,7 @@ if ($output_format === 'json') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💳 HIT - Advanced CC Checker with Custom Address</title>
+    <title>💳 HIT - Advanced CC Checker with Complete Customer Details</title>
     <style>
         * {
             margin: 0;
@@ -577,7 +595,7 @@ if ($output_format === 'json') {
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
         
@@ -629,6 +647,12 @@ if ($output_format === 'json') {
             font-weight: 600;
             margin-bottom: 8px;
             color: #334155;
+            font-size: 14px;
+        }
+        
+        label small {
+            font-weight: 400;
+            color: #94a3b8;
         }
         
         input, textarea, select {
@@ -646,8 +670,23 @@ if ($output_format === 'json') {
         }
         
         textarea {
-            min-height: 100px;
+            min-height: 80px;
             font-family: 'Courier New', monospace;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .grid-3 {
+            grid-template-columns: repeat(3, 1fr);
         }
         
         .btn {
@@ -672,11 +711,9 @@ if ($output_format === 'json') {
             background: linear-gradient(135deg, #8b5cf6, #7c3aed);
         }
         
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 13px;
         }
         
         .result-card {
@@ -713,6 +750,7 @@ if ($output_format === 'json') {
             border-bottom: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
+            font-size: 13px;
         }
         
         .result-item:last-child {
@@ -749,21 +787,11 @@ if ($output_format === 'json') {
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
+            font-size: 14px;
         }
         
         .info-box strong {
             color: #1e40af;
-        }
-        
-        .code-block {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            overflow-x: auto;
-            margin-top: 10px;
         }
         
         .stats {
@@ -793,15 +821,37 @@ if ($output_format === 'json') {
             font-size: 12px;
             opacity: 0.9;
         }
+        
+        .section-title {
+            background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: 25px 0 15px;
+            font-weight: 700;
+            color: #1e293b;
+            border-left: 4px solid #6366f1;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid, .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1><span>💳</span> HIT - CC Checker with Custom Address</h1>
+            <h1><span>💳</span> HIT - CC Checker with Complete Customer Details</h1>
             <p class="subtitle">
-                Advanced credit card checker with custom address input and automatic proxy rotation. 
-                Check multiple cards with real addresses on any payment gateway.
+                Advanced credit card checker with complete customer information (name, email, phone, address, currency, country). 
+                Automatic proxy rotation and gateway detection included.
             </p>
         </div>
         
@@ -847,6 +897,26 @@ if ($output_format === 'json') {
                     <span><?= htmlspecialchars($result['gateway']) ?></span>
                 </div>
                 <div class="result-item">
+                    <strong>Customer:</strong>
+                    <span><?= htmlspecialchars($result['customer']['name']) ?></span>
+                </div>
+                <div class="result-item">
+                    <strong>Email:</strong>
+                    <span><?= htmlspecialchars($result['customer']['email']) ?></span>
+                </div>
+                <div class="result-item">
+                    <strong>Phone:</strong>
+                    <span><?= htmlspecialchars($result['customer']['phone']) ?></span>
+                </div>
+                <div class="result-item">
+                    <strong>Address:</strong>
+                    <span><?= htmlspecialchars($result['customer']['address']) ?></span>
+                </div>
+                <div class="result-item">
+                    <strong>Country/Currency:</strong>
+                    <span><?= htmlspecialchars($result['customer']['country']) ?> / <?= htmlspecialchars($result['customer']['currency']) ?></span>
+                </div>
+                <div class="result-item">
                     <strong>Response Time:</strong>
                     <span><?= $result['response_time'] ?>ms</span>
                 </div>
@@ -856,60 +926,121 @@ if ($output_format === 'json') {
                     <span><?= htmlspecialchars($result['proxy_used']) ?></span>
                 </div>
                 <?php endif; ?>
-                <?php if (isset($result['http_code'])): ?>
-                <div class="result-item">
-                    <strong>HTTP Code:</strong>
-                    <span><?= $result['http_code'] ?></span>
-                </div>
-                <?php endif; ?>
             </div>
             <?php endforeach; ?>
-            
-            <div class="info-box">
-                <strong>Address Used:</strong><br>
-                <?= nl2br(htmlspecialchars($address ? formatAddressDisplay($address) : 'No address')) ?><br>
-                <small>Source: <?= htmlspecialchars($address_source) ?></small>
-            </div>
         </div>
         <?php endif; ?>
         
         <div class="card">
-            <h2>🚀 Check Credit Cards</h2>
+            <h2>🚀 Check Credit Cards with Complete Details</h2>
             
             <form method="POST" action="">
+                <div class="section-title">💳 Card Information</div>
                 <div class="form-group">
-                    <label>💳 Credit Card(s) <small>(Format: number|month|year|cvv)</small></label>
+                    <label>Credit Card(s) <small>(Format: number|month|year|cvv)</small></label>
                     <textarea name="cc" placeholder="4111111111111111|12|2027|123&#10;5555555555554444|01|2026|456" required><?= isset($_POST['cc']) ? htmlspecialchars($_POST['cc']) : '' ?></textarea>
-                    <small style="color: #64748b;">Separate multiple cards with new lines. Test cards shown above for demo.</small>
+                    <div class="help-text">Separate multiple cards with new lines</div>
+                </div>
+                
+                <div class="section-title">👤 Customer Information</div>
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" name="first_name" placeholder="John" value="<?= isset($_POST['first_name']) ? htmlspecialchars($_POST['first_name']) : '' ?>">
+                        <div class="help-text">Leave empty for auto-generation</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" name="last_name" placeholder="Smith" value="<?= isset($_POST['last_name']) ? htmlspecialchars($_POST['last_name']) : '' ?>">
+                        <div class="help-text">Leave empty for auto-generation</div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" name="email" placeholder="john.smith@gmail.com" value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>">
+                        <div class="help-text">Leave empty for auto-generation</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" name="phone" placeholder="+12125551234" value="<?= isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : '' ?>">
+                        <div class="help-text">Format: +1XXXXXXXXXX</div>
+                    </div>
                 </div>
                 
                 <div class="form-group">
-                    <label>📍 Address <small>(Required for most gateways)</small></label>
-                    <textarea name="address" placeholder="350, 5th Ave, New York, NY, 10118&#10;OR&#10;350|5th Ave|New York|NY|10118" required><?= isset($_POST['address']) ? htmlspecialchars($_POST['address']) : '' ?></textarea>
-                    <small style="color: #64748b;">
-                        Formats: <br>
-                        • Comma-separated: "Street, City, State, ZIP"<br>
-                        • Pipe-separated: "Number|Street|City|State|ZIP"<br>
-                        • Leave empty for random US address
-                    </small>
+                    <label>Cardholder Name <small>(as appears on card)</small></label>
+                    <input type="text" name="cardholder_name" placeholder="JOHN SMITH" value="<?= isset($_POST['cardholder_name']) ? htmlspecialchars($_POST['cardholder_name']) : '' ?>">
+                    <div class="help-text">Leave empty to use First Name + Last Name</div>
                 </div>
                 
+                <div class="section-title">📍 Address Information</div>
                 <div class="form-group">
-                    <label>🌐 Target Site <small>(Payment page URL)</small></label>
+                    <label>Street Address</label>
+                    <input type="text" name="street_address" placeholder="350 5th Ave" value="<?= isset($_POST['street_address']) ? htmlspecialchars($_POST['street_address']) : '' ?>">
+                    <div class="help-text">Leave empty for random US address</div>
+                </div>
+                
+                <div class="grid grid-3">
+                    <div class="form-group">
+                        <label>City</label>
+                        <input type="text" name="city" placeholder="New York" value="<?= isset($_POST['city']) ? htmlspecialchars($_POST['city']) : '' ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>State/Province</label>
+                        <input type="text" name="state" placeholder="NY" value="<?= isset($_POST['state']) ? htmlspecialchars($_POST['state']) : '' ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Postal Code</label>
+                        <input type="text" name="postal_code" placeholder="10118" value="<?= isset($_POST['postal_code']) ? htmlspecialchars($_POST['postal_code']) : '' ?>">
+                    </div>
+                </div>
+                
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label>Country</label>
+                        <select name="country">
+                            <option value="US">United States (US)</option>
+                            <option value="CA">Canada (CA)</option>
+                            <option value="GB">United Kingdom (GB)</option>
+                            <option value="AU">Australia (AU)</option>
+                            <option value="FR">France (FR)</option>
+                            <option value="DE">Germany (DE)</option>
+                            <option value="IN">India (IN)</option>
+                            <option value="BR">Brazil (BR)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Currency</label>
+                        <select name="currency">
+                            <option value="USD">USD - US Dollar</option>
+                            <option value="EUR">EUR - Euro</option>
+                            <option value="GBP">GBP - British Pound</option>
+                            <option value="CAD">CAD - Canadian Dollar</option>
+                            <option value="AUD">AUD - Australian Dollar</option>
+                            <option value="INR">INR - Indian Rupee</option>
+                            <option value="BRL">BRL - Brazilian Real</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="section-title">🌐 Target & Options</div>
+                <div class="form-group">
+                    <label>Target Site <small>(Payment page URL)</small></label>
                     <input type="url" name="site" placeholder="https://example.myshopify.com/checkout" value="<?= isset($_POST['site']) ? htmlspecialchars($_POST['site']) : '' ?>" required>
                 </div>
                 
-                <div class="grid">
+                <div class="grid grid-2">
                     <div class="form-group">
-                        <label>🔄 Proxy Rotation</label>
+                        <label>Proxy Rotation</label>
                         <select name="rotate">
                             <option value="1">Enabled (Recommended)</option>
                             <option value="0">Disabled</option>
                         </select>
                     </div>
-                    
                     <div class="form-group">
-                        <label>📤 Output Format</label>
+                        <label>Output Format</label>
                         <select name="format">
                             <option value="html">HTML (Interactive)</option>
                             <option value="json">JSON (API)</option>
@@ -917,72 +1048,67 @@ if ($output_format === 'json') {
                     </div>
                 </div>
                 
-                <button type="submit" class="btn">⚡ Start Checking</button>
-                <button type="button" class="btn btn-secondary" onclick="fillTestData()">🧪 Fill Test Data</button>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 20px;">
+                    <button type="submit" class="btn">⚡ Start Checking</button>
+                    <button type="button" class="btn btn-secondary" onclick="fillTestData()">🧪 Fill Test Data</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearForm()">🗑️ Clear Form</button>
+                </div>
             </form>
         </div>
         
         <div class="card">
-            <h2>📚 API Documentation</h2>
+            <h2>📚 Quick Reference</h2>
             
-            <h3 style="margin-bottom: 10px;">GET Request:</h3>
-            <div class="code-block">
-hit.php?cc=CARD&address=ADDRESS&site=URL&format=json
-
-Examples:
-hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com
-
-# Multiple cards (URL encode newlines as %0A)
-hit.php?cc=4111111111111111|12|2027|123%0A5555555555554444|01|2026|456&address=...&site=...
-
-# Use state-based address
-hit.php?cc=CARD&state=CA&site=URL
-
-# Random address (auto-generated)
-hit.php?cc=CARD&site=URL
-            </div>
-            
-            <h3 style="margin: 20px 0 10px;">Address Formats:</h3>
-            <div class="code-block">
-# Comma-separated
-address=350, 5th Ave, New York, NY, 10118
-
-# Pipe-separated
-address=350|5th Ave|New York|NY|10118
-
-# By state (uses random address from that state)
-state=CA
-
-# Random (omit address parameter)
-            </div>
-            
-            <h3 style="margin: 20px 0 10px;">Features:</h3>
-            <ul style="list-style: none; padding: 0; margin-top: 15px;">
-                <li style="padding: 8px 0;">✓ Custom address for every check</li>
-                <li style="padding: 8px 0;">✓ Automatic proxy rotation with rate limit handling</li>
-                <li style="padding: 8px 0;">✓ Bulk CC checking (multiple cards at once)</li>
-                <li style="padding: 8px 0;">✓ Gateway auto-detection</li>
-                <li style="padding: 8px 0;">✓ Luhn validation</li>
-                <li style="padding: 8px 0;">✓ JSON & HTML output</li>
-                <li style="padding: 8px 0;">✓ Response time tracking</li>
-                <li style="padding: 8px 0;">✓ <?= $proxy_count ?> proxies loaded</li>
+            <h3 style="margin-bottom: 10px; color: #1e293b;">Required Fields:</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li style="padding: 5px 0;">✅ Credit Card(s)</li>
+                <li style="padding: 5px 0;">✅ Target Site</li>
             </ul>
+            
+            <h3 style="margin: 15px 0 10px; color: #1e293b;">Auto-Generated Fields (if left empty):</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li style="padding: 5px 0;">🤖 First Name, Last Name</li>
+                <li style="padding: 5px 0;">🤖 Email Address (based on name)</li>
+                <li style="padding: 5px 0;">🤖 Phone Number (US format)</li>
+                <li style="padding: 5px 0;">🤖 Cardholder Name (First + Last)</li>
+                <li style="padding: 5px 0;">🤖 Complete Address (random US address)</li>
+            </ul>
+            
+            <div class="info-box" style="margin-top: 20px;">
+                <strong>💡 Pro Tip:</strong> Leave all customer fields empty to use completely random, realistic data for each check. This is perfect for testing without manually entering details!
+            </div>
         </div>
         
         <div class="info-box">
             <strong>⚠️ Important Notes:</strong><br>
             • This tool is for testing purposes only. Use responsibly and legally.<br>
-            • Requires ProxyList.txt with working proxies for rotation.<br>
-            • Address format affects gateway compatibility - use real formats.<br>
-            • Some gateways require specific address validation (ZIP, state match, etc.).
+            • All 11 required fields are collected: Currency, Country, Street, City, State, Postal Code, First Name, Last Name, Email, Phone, Cardholder Name.<br>
+            • Fields left empty will be auto-generated with realistic data.<br>
+            • <?= $proxy_count ?> proxies loaded for rotation.
         </div>
     </div>
     
     <script>
         function fillTestData() {
             document.querySelector('textarea[name="cc"]').value = '4111111111111111|12|2027|123\n5555555555554444|01|2026|456';
-            document.querySelector('textarea[name="address"]').value = '350, 5th Ave, New York, NY, 10118';
+            document.querySelector('input[name="first_name"]').value = 'John';
+            document.querySelector('input[name="last_name"]').value = 'Smith';
+            document.querySelector('input[name="email"]').value = 'john.smith@gmail.com';
+            document.querySelector('input[name="phone"]').value = '+12125551234';
+            document.querySelector('input[name="cardholder_name"]').value = 'JOHN SMITH';
+            document.querySelector('input[name="street_address"]').value = '350 5th Ave';
+            document.querySelector('input[name="city"]').value = 'New York';
+            document.querySelector('input[name="state"]').value = 'NY';
+            document.querySelector('input[name="postal_code"]').value = '10118';
+            document.querySelector('select[name="country"]').value = 'US';
+            document.querySelector('select[name="currency"]').value = 'USD';
             document.querySelector('input[name="site"]').value = 'https://example.myshopify.com';
+        }
+        
+        function clearForm() {
+            if (confirm('Clear all form fields?')) {
+                document.querySelector('form').reset();
+            }
         }
     </script>
 </body>
