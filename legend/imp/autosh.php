@@ -30,6 +30,22 @@ require_once 'AdvancedCaptchaSolver.php';
 require_once 'ProxyAnalytics.php';
 require_once 'TelegramNotifier.php';
 
+if (!function_exists('request_string')) {
+    /**
+     * Fetch a scalar string from $_GET with minimal normalization.
+     */
+    function request_string(string $key): string {
+        if (!isset($_GET[$key])) {
+            return '';
+        }
+        $value = $_GET[$key];
+        if (is_array($value)) {
+            $value = reset($value);
+        }
+        return trim((string)$value);
+    }
+}
+
 // Initialize advanced systems
 $analytics = new ProxyAnalytics();
 $telegram = new TelegramNotifier();
@@ -221,9 +237,54 @@ $city_us = $randomAddress['city'];
 $state_us = $randomAddress['state'];
 $zip_us = $randomAddress['zip'];
 
+$inputStreetAddress = request_string('street_address');
+$inputStreetAddress2 = request_string('street_address2');
+$inputCity = request_string('city');
+$inputState = strtoupper(request_string('state'));
+$inputPostal = request_string('postal_code');
+$inputCountry = strtoupper(request_string('country'));
+$inputFirstName = request_string('first_name');
+$inputLastName = request_string('last_name');
+$inputEmail = request_string('email');
+$inputCardholder = request_string('cardholder_name');
+if ($inputCardholder === '' && $inputFirstName !== '' && $inputLastName !== '') {
+    $inputCardholder = trim($inputFirstName . ' ' . $inputLastName);
+}
+$firstname = $inputFirstName;
+$lastname = $inputLastName;
+$email = $inputEmail;
+$cardholder_name = $inputCardholder;
+if ($inputCountry === '') {
+    $inputCountry = 'US';
+}
+$customAddressProvided = ($inputStreetAddress !== '' && $inputCity !== '' && $inputState !== '' && $inputPostal !== '');
+if ($customAddressProvided) {
+    if (preg_match('/^\s*([0-9]+)\s+(.*)$/', $inputStreetAddress, $matches)) {
+        $num_us = $matches[1];
+        $address_us = $matches[2];
+    } else {
+        $num_us = '';
+        $address_us = $inputStreetAddress;
+    }
+    // Append second line if supplied
+    if ($inputStreetAddress2 !== '') {
+        $address_us = trim($address_us . ' ' . $inputStreetAddress2);
+    }
+    $address = trim($inputStreetAddress . ($inputStreetAddress2 !== '' ? ' ' . $inputStreetAddress2 : ''));
+    $city_us = $inputCity;
+    $state_us = $inputState;
+    $zip_us = $inputPostal;
+}
+$country_code = $inputCountry;
+
 require_once 'no.php';
-$areaCode = $areaCodes[array_rand($areaCodes)];
-$phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+$inputPhone = request_string('phone');
+if ($inputPhone !== '') {
+    $phone = $inputPhone;
+} else {
+    $areaCode = $areaCodes[array_rand($areaCodes)];
+    $phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+}
 
 // Important functions start
 // Lightweight embedded utilities: CaptchaSolver and GatewayDetector
@@ -1680,7 +1741,15 @@ $sub_month = "11";
 $sub_month = "12";
 }
 
-$geoaddress = urlencode("$num_us, $address_us, $city_us");
+$geoaddressParts = array_filter([
+    $num_us !== '' ? $num_us : null,
+    $address_us,
+    $city_us,
+    $state_us,
+    $zip_us,
+    $country_code
+]);
+$geoaddress = urlencode(implode(', ', array_filter(array_map('trim', $geoaddressParts))));
 // echo "<li>geoaddress: $geoaddress<li>";
 
 $ch = curl_init();
@@ -1706,24 +1775,44 @@ if (!$geocoding_data || !is_array($geocoding_data) || !isset($geocoding_data[0])
 // echo "<li>lat: $lat<li>";
 // echo "<li>lon: $lon<li>";
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, 'https://randomuser.me/api/?nat=us');
-apply_proxy_if_used($ch, 'https://randomuser.me/api');
-apply_common_timeouts($ch);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-$resposta = curl_exec($ch);
-curl_close($ch);
+$needsRandomProfile = ($firstname === '' || $lastname === '' || $email === '');
+if ($needsRandomProfile) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://randomuser.me/api/?nat=us');
+    apply_proxy_if_used($ch, 'https://randomuser.me/api');
+    apply_common_timeouts($ch);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $resposta = curl_exec($ch);
+    curl_close($ch);
 
-$firstname = find_between($resposta, '"first":"', '"');
-$lastname = find_between($resposta, '"last":"', '"');
-// Remove or comment out the lines that generate a random email
-// $email = find_between($resposta, '"email":"', '"');
-// $serve_arr = array("gmail.com","yahoo.com","hotmail.com","outlook.com");
-// $serv_rnd = $serve_arr[array_rand($serve_arr)];
-// $email = str_replace("example.com", $serv_rnd, $email);
+    if ($resposta !== false && $resposta !== null) {
+        if ($firstname === '') {
+            $candidate = find_between($resposta, '"first":"', '"');
+            if ($candidate !== '') {
+                $firstname = $candidate;
+            }
+        }
+        if ($lastname === '') {
+            $candidate = find_between($resposta, '"last":"', '"');
+            if ($candidate !== '') {
+                $lastname = $candidate;
+            }
+        }
+        if ($email === '') {
+            $candidate = find_between($resposta, '"email":"', '"');
+            if ($candidate !== '') {
+                $email = $candidate;
+            }
+        }
+    }
+}
 
-// Set your own email directly
-$email = "sarthakgrid@gmail.com"; // Replace with your actual email
+if ($email === '') {
+    $email = 'autosh-' . substr(hash('crc32', microtime(true) . mt_rand()), 0, 8) . '@example.com';
+}
+if ($cardholder_name === '') {
+    $cardholder_name = trim(($firstname !== '' ? $firstname : 'John') . ' ' . ($lastname !== '' ? $lastname : 'Doe'));
+}
 
 function getMinimumPriceProductDetails(string $json): array {
     $data = json_decode($json, true);
@@ -2378,7 +2467,7 @@ $proposalPayload = [
                                     'address1' => $address,
                                     'address2' => '',
                                     'city' => $city_us,
-                                    'countryCode' => 'US',
+                                    'countryCode' => $country_code,
                                     'postalCode' => $zip_us,
                                     'firstName' => $firstname,
                                     'lastName' => $lastname,
@@ -2469,7 +2558,7 @@ $proposalPayload = [
                         'address1' => $address,
                         'address2' => '',
                         'city' => $city_us,
-                        'countryCode' => 'US',
+                        'countryCode' => $country_code,
                         'postalCode' => $zip_us,
                         'firstName' => $firstname,
                         'lastName' => $lastname,
@@ -2481,14 +2570,14 @@ $proposalPayload = [
             'buyerIdentity' => [
                 'customer' => [
                     'presentmentCurrency' => 'USD',
-                    'countryCode' => 'US'
+                    'countryCode' => $country_code
                 ],
                 'email' => $email,
                 'emailChanged' => false,
                 'phoneCountryCode' => 'US',
                 'marketingConsent' => [],
                 'shopPayOptInPhone' => [
-                    'countryCode' => 'US'
+                    'countryCode' => $country_code
                 ],
                 'rememberMe' => false
             ],
@@ -2822,7 +2911,7 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
                                                     'address1' => $address,
                                                     'address2' => '',
                                                     'city' => $city_us,
-                                                    'countryCode' => 'US',
+                                                    'countryCode' => $country_code,
                                                     'postalCode' => $zip_us,
                                                     'firstName' => $firstname,
                                                     'lastName' => $lastname,
@@ -2861,7 +2950,7 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
                                     'address1' => $address,
                                     'address2' => '',
                                     'city' => $city_us,
-                                    'countryCode' => 'US',
+                                    'countryCode' => $country_code,
                                     'postalCode' => $zip_us,
                                     'firstName' => $firstname,
                                     'lastName' => $lastname,
@@ -2873,14 +2962,14 @@ if ($totalamt == '10.98' && $currencycode == 'USD') {
                         'buyerIdentity' => [
                             'customer' => [
                                 'presentmentCurrency' => 'US',
-                                'countryCode' => 'US'
+                                'countryCode' => $country_code
                             ],
                             'email' => $email,
                             'emailChanged' => false,
                             'phoneCountryCode' => 'US',
                             'marketingConsent' => [],
                             'shopPayOptInPhone' => [
-                                'countryCode' => 'US'
+                                'countryCode' => $country_code
                             ],
                             'rememberMe' => false
                         ],
@@ -2948,7 +3037,7 @@ elseif ($currencycode == 'USD') {
                                         'address1' => $address,
                                         'address2' => '',
                                         'city' => $city_us,
-                                        'countryCode' => 'US',
+                                        'countryCode' => $country_code,
                                         'postalCode' => $zip_us,
                                         'firstName' => $firstname,
                                         'lastName' => $lastname,
@@ -3040,7 +3129,7 @@ elseif ($currencycode == 'USD') {
                                                 'address1' => $address,
                                                 'address2' => '',
                                                 'city' => $city_us,
-                                                'countryCode' => 'US',
+                                                'countryCode' => $country_code,
                                                 'postalCode' => $zip_us,
                                                 'firstName' => $firstname,
                                                 'lastName' => $lastname,
@@ -3079,7 +3168,7 @@ elseif ($currencycode == 'USD') {
                                 'address1' => $address,
                                 'address2' => '',
                                 'city' => $city_us,
-                                'countryCode' => 'US',
+                                'countryCode' => $country_code,
                                 'postalCode' => $zip_us,
                                 'firstName' => $firstname,
                                 'lastName' => $lastname,
@@ -3091,14 +3180,14 @@ elseif ($currencycode == 'USD') {
                     'buyerIdentity' => [
                         'customer' => [
                             'presentmentCurrency' => 'USD',
-                            'countryCode' => 'US'
+                            'countryCode' => $country_code
                         ],
                         'email' => $email,
                         'emailChanged' => false,
                         'phoneCountryCode' => 'US',
                         'marketingConsent' => [],
                         'shopPayOptInPhone' => [
-                            'countryCode' => 'US'
+                            'countryCode' => $country_code
                         ]
                     ],
                     'tip' => [
@@ -3367,7 +3456,7 @@ elseif ($currencycode == 'NZD') {
                                      'address1' => $address,
                                      'address2' => '',
                                      'city' => $city_us,
-                                     'countryCode' => 'US',
+                                      'countryCode' => $country_code,
                                      'postalCode' => $zip_us,
                                      'firstName' => $firstname,
                                      'lastName' => $lastname,
@@ -3459,7 +3548,7 @@ elseif ($currencycode == 'NZD') {
                                              'address1' => $address,
                                              'address2' => '',
                                              'city' => $city_us,
-                                             'countryCode' => 'US',
+                                            'countryCode' => $country_code,
                                              'postalCode' => $zip_us,
                                              'firstName' => $firstname,
                                              'lastName' => $lastname,
@@ -3498,7 +3587,7 @@ elseif ($currencycode == 'NZD') {
                              'address1' => $address,
                              'address2' => '',
                              'city' => $city_us,
-                             'countryCode' => 'US',
+                            'countryCode' => $country_code,
                              'postalCode' => $zip_us,
                              'firstName' => $firstname,
                              'lastName' => $lastname,
@@ -3510,14 +3599,14 @@ elseif ($currencycode == 'NZD') {
                  'buyerIdentity' => [
                      'customer' => [
                          'presentmentCurrency' => 'USD',
-                         'countryCode' => 'US'
+                        'countryCode' => $country_code
                      ],
                      'email' => $email,
                      'emailChanged' => false,
                      'phoneCountryCode' => 'US',
                      'marketingConsent' => [],
                      'shopPayOptInPhone' => [
-                         'countryCode' => 'US'
+                        'countryCode' => $country_code
                      ]
                  ],
                  'tip' => [
