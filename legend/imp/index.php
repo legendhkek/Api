@@ -1073,17 +1073,17 @@ if ('serviceWorker' in navigator) {
 
     <!-- Tools & Tests Tab -->
     <div id="tools-tab" class="tab-content">
-        <div class="card" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 4px solid #3b82f6;">
-            <h2>💳 HIT.PHP - Custom Address Checker (NEW!)</h2>
-            <p><strong>Check cards with custom addresses on any gateway!</strong> Supports bulk checking, proxy rotation, and multiple address formats.</p>
+        <div class="card" style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-left: 4px solid #10b981;">
+            <h2>💳 HIT.PHP - Advanced Gateway Checker with Real APIs (NEW!)</h2>
+            <p><strong>Real gateway integration with Shopify, Stripe, WooCommerce & 50+ gateways!</strong> Uses actual JSON payment APIs from autosh.php. Address REQUIRED (no auto-generation).</p>
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
                 <a href="hit.php" class="btn btn-success" target="_blank">🚀 Open HIT Checker</a>
-                <a href="HIT_README.md" class="btn" target="_blank">📚 Documentation</a>
-                <a href="HIT_EXAMPLES.txt" class="btn" target="_blank">📖 Examples</a>
-                <a href="test_hit.php" class="btn" target="_blank">🧪 Run Tests</a>
+                <a href="HIT_ADVANCED_SUMMARY.txt" class="btn" target="_blank">📚 Features</a>
+                <a href="HIT_README.md" class="btn" target="_blank">📖 Docs</a>
             </div>
             <div style="margin-top: 15px; padding: 12px; background: white; border-radius: 8px; font-size: 13px;">
-                <strong>Features:</strong> Custom addresses • Bulk CC checking • Auto proxy rotation • Gateway detection • JSON/HTML output • Luhn validation
+                <strong>✅ Real APIs:</strong> Shopify payment sessions • Advanced GatewayDetector from autosh.php • JSON payment requests<br>
+                <strong>✅ Requirements:</strong> All 11 fields required • Address mandatory • No auto-generation • Proxy rotation
             </div>
         </div>
         
