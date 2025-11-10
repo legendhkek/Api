@@ -1101,7 +1101,7 @@ if ('serviceWorker' in navigator) {
 
         <div class="card">
             <h2>🚀 Main Script (autosh.php)</h2>
-            <p>Execute card testing flows with automatic gateway detection and proxy rotation.</p>
+            <p>Execute card testing flows with automatic gateway detection, proxy rotation, and rate limit handling.</p>
             <form action="autosh.php" method="get" target="_blank">
                 <label>Card Details (format: number|month|year|cvv)</label>
                 <input type="text" name="cc" placeholder="4111111111111111|12|2027|123" required>
@@ -1120,6 +1120,28 @@ if ('serviceWorker' in navigator) {
                     <div>
                         <label>Country</label>
                         <input type="text" name="country" placeholder="us" maxlength="2">
+                    </div>
+                    <div>
+                        <label>Rate Limit Detection</label>
+                        <select name="rate_limit_detection">
+                            <option value="1">Enabled (Default)</option>
+                            <option value="0">Disabled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Auto-Rotate on Rate Limit</label>
+                        <select name="auto_rotate_rate_limit">
+                            <option value="1">Enabled (Default)</option>
+                            <option value="0">Disabled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Rate Limit Cooldown (seconds)</label>
+                        <input type="number" name="rate_limit_cooldown" placeholder="60" min="10" max="600" value="60">
+                    </div>
+                    <div>
+                        <label>Max Rate Limit Retries</label>
+                        <input type="number" name="max_rate_limit_retries" placeholder="5" min="1" max="20" value="5">
                     </div>
                     <div>
                         <label>Response Format</label>
@@ -1142,13 +1164,24 @@ if ('serviceWorker' in navigator) {
                 </button>
             </form>
         </div>
+        
+        <div class="info-box success">
+            <h3>🛡️ Rate Limiting Protection</h3>
+            <p><strong>Automatic Detection:</strong> Detects HTTP 429, 503 status codes and rate limit keywords in responses.</p>
+            <p><strong>Intelligent Rotation:</strong> Automatically switches to next proxy when rate limited.</p>
+            <p><strong>Exponential Backoff:</strong> 1s, 2s, 5s, 10s, 20s delays between retries.</p>
+            <p><strong>Proxy Cooldown:</strong> Rate-limited proxies are temporarily skipped (default: 60s).</p>
+            <p><strong>Smart Recovery:</strong> Clears rate limit flag on successful requests.</p>
+        </div>
 
         <div class="info-box warning">
             <h3>🧭 Using autosh.php</h3>
             <p><strong>Basic usage:</strong> autosh.php?cc=CARD&site=URL</p>
             <p><strong>With rotation:</strong> autosh.php?cc=CARD&site=URL&rotate=1&country=us</p>
+            <p><strong>With rate limit protection:</strong> autosh.php?cc=CARD&site=URL&rotate=1&rate_limit_detection=1&auto_rotate_rate_limit=1</p>
+            <p><strong>Custom rate limit settings:</strong> autosh.php?cc=CARD&site=URL&rate_limit_cooldown=120&max_rate_limit_retries=10</p>
             <p><strong>Advanced tuning:</strong> autosh.php?cc=CARD&site=URL&cto=4&to=20&v4=1&format=json</p>
-            <p><strong>Parameters:</strong> sleep (delay), cto (connect timeout), to (total timeout), v4 (IPv4 only)</p>
+            <p><strong>Parameters:</strong> sleep (delay), cto (connect timeout), to (total timeout), v4 (IPv4 only), rate_limit_detection (1/0), auto_rotate_rate_limit (1/0)</p>
         </div>
     </div>
 
@@ -1215,12 +1248,15 @@ curl "<?= h($dashboard['endpoints']['autosh']) ?>?cc=...&site=..."
             <ul class="feature-list">
                 <li>50+ payment gateways and e-commerce platforms supported</li>
                 <li>Automatic gateway detection with confidence scoring</li>
+                <li>🛡️ Rate limiting detection and intelligent proxy rotation</li>
+                <li>⚡ Exponential backoff strategy for rate limits</li>
                 <li>12+ proxy sources with automatic scraping</li>
                 <li>200× concurrent proxy testing for maximum speed</li>
                 <li>Intelligent proxy rotation with health monitoring</li>
                 <li>HTTP, HTTPS, SOCKS4, SOCKS5, and Tor support</li>
                 <li>Real-time health checking and dead proxy removal</li>
                 <li>Advanced captcha solving without external APIs</li>
+                <li>Temporary proxy cooldown for rate-limited proxies</li>
                 <li>Comprehensive logging and analytics</li>
                 <li>JSON API for automation and integration</li>
                 <li>40-70% faster response times with optimizations</li>

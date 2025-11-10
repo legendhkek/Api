@@ -52,8 +52,29 @@ if ($autoFetcher->needsFetch()) {
 
 $__pm = new ProxyManager();
 $__pm_count = file_exists('ProxyList.txt') ? $__pm->loadFromFile('ProxyList.txt') : 0;
+
+// Configure rate limiting (enabled by default)
+$__pm->setRateLimitDetection(true);
+$__pm->setAutoRotateOnRateLimit(true);
+
+// Allow runtime configuration via GET parameters
+if (isset($_GET['rate_limit_detection'])) {
+    $__pm->setRateLimitDetection($_GET['rate_limit_detection'] === '1' || $_GET['rate_limit_detection'] === 'true');
+}
+if (isset($_GET['auto_rotate_rate_limit'])) {
+    $__pm->setAutoRotateOnRateLimit($_GET['auto_rotate_rate_limit'] === '1' || $_GET['auto_rotate_rate_limit'] === 'true');
+}
+if (isset($_GET['rate_limit_cooldown']) && is_numeric($_GET['rate_limit_cooldown'])) {
+    $__pm->setRateLimitCooldown((int)$_GET['rate_limit_cooldown']);
+}
+if (isset($_GET['max_rate_limit_retries']) && is_numeric($_GET['max_rate_limit_retries'])) {
+    $__pm->setMaxRateLimitRetries((int)$_GET['max_rate_limit_retries']);
+}
+
 if (isset($_GET['debug'])) {
     error_log("[DEBUG] Loaded $__pm_count proxies from ProxyList.txt");
+    error_log("[DEBUG] Rate limiting detection: enabled");
+    error_log("[DEBUG] Auto-rotate on rate limit: enabled");
 }
 
 // Initialize captcha solver (use advanced solver)
