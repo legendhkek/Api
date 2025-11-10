@@ -135,3 +135,29 @@
 [2025-11-10 15:06:24] ✓ Proxy health check passed: socks4://192.111.138.29:4145 (0.48992800712585s)
 [2025-11-10 15:06:28] ✓ Proxy health check passed: socks4://49.0.246.130:443 (4.3821518421173s)
 [2025-11-10 15:06:33] ✓ Proxy health check passed: socks4://192.111.134.10:4145 (0.32167291641235s)
+[2025-11-10 16:21:22] Loaded 57 proxies from file
+[2025-11-10 16:21:30] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:30] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:21:35] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:35] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 16:21:35] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.58992600440979s)
+[2025-11-10 16:21:37] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (0.66552400588989s)
+[2025-11-10 16:21:40] ✓ Proxy health check passed: socks5://199.102.106.94:4145 (0.23589110374451s)
+[2025-11-10 16:21:47] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:47] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-10 16:21:48] ✓ Proxy health check passed: socks4://72.195.34.60:27391 (0.69816207885742s)
+[2025-11-10 16:21:48] ✓ Proxy health check passed: socks4://192.111.138.29:4145 (0.51455020904541s)
+[2025-11-10 16:21:53] ✓ Proxy health check passed: socks4://49.0.246.130:443 (4.3547987937927s)
+[2025-11-10 16:21:59] ✓ Proxy health check passed: socks4://192.111.134.10:4145 (0.25470685958862s)
+[2025-11-10 16:22:06] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Failed to connect to 181.28.137.18 port 5678 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:06] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-10 16:22:11] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Failed to connect to 123.231.230.58 port 31196 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:11] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-10 16:22:16] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Failed to connect to 218.26.101.226 port 53813 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:16] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-10 16:22:19] ✓ Proxy health check passed: socks4://192.252.209.155:14455 (2.0236260890961s)
+[2025-11-10 16:22:21] ✓ Proxy health check passed: socks4://98.188.47.150:4145 (0.68669104576111s)
+[2025-11-10 16:22:24] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: connection to proxy closed (Code: 97)
+[2025-11-10 16:22:24] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-10 16:22:24] ✓ Proxy health check passed: socks4://198.8.94.170:4145 (0.44125699996948s)
+[2025-11-10 16:22:26] ✓ Proxy health check passed: socks4://184.178.172.14:4145 (0.55166912078857s)
