@@ -46,24 +46,99 @@ if (!function_exists('request_string')) {
     }
 }
 
+if (!function_exists('parse_bool_flag')) {
+    /**
+     * Normalize client-provided flag values (query/env) into booleans.
+     */
+    function parse_bool_flag($value, bool $default = false): bool {
+        if ($value === null) {
+            return $default;
+        }
+        $value = strtolower(trim((string)$value));
+        if ($value === '') {
+            return $default;
+        }
+        $truthy = ['1', 'true', 'yes', 'on', 'enable', 'enabled'];
+        $falsy  = ['0', 'false', 'no', 'off', 'disable', 'disabled'];
+        if (in_array($value, $truthy, true)) {
+            return true;
+        }
+        if (in_array($value, $falsy, true)) {
+            return false;
+        }
+        return $default;
+    }
+}
+
+if (!function_exists('generate_session_token')) {
+    /**
+     * Generate a short hexadecimal token, tolerant of environments lacking random_bytes().
+     */
+    function generate_session_token(int $bytes = 4): string {
+        if ($bytes < 1) {
+            $bytes = 1;
+        }
+        if (function_exists('random_bytes')) {
+            try {
+                return substr(bin2hex(random_bytes($bytes)), 0, $bytes * 2);
+            } catch (Throwable $e) {
+                // fall through to alternate strategies
+            }
+        }
+        if (function_exists('openssl_random_pseudo_bytes')) {
+            $strong = false;
+            $token = openssl_random_pseudo_bytes($bytes, $strong);
+            if ($token !== false && !empty($token)) {
+                return substr(bin2hex($token), 0, $bytes * 2);
+            }
+        }
+        $chars = '0123456789abcdef';
+        $hex = '';
+        for ($i = 0; $i < $bytes * 2; $i++) {
+            $hex .= $chars[mt_rand(0, 15)];
+        }
+        return $hex;
+    }
+}
+
 // Initialize advanced systems
 $analytics = new ProxyAnalytics();
 $telegram = new TelegramNotifier();
 $advancedCaptchaSolver = new AdvancedCaptchaSolver(isset($_GET['debug']));
 
-// Auto-fetch proxies if needed
-$autoFetcher = new AutoProxyFetcher(['debug' => isset($_GET['debug'])]);
-if ($autoFetcher->needsFetch()) {
-    error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
-    $fetchResult = $autoFetcher->ensureProxies();
-    if ($fetchResult['success'] && $fetchResult['fetched']) {
-        error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
-        
-        // Notify via Telegram if enabled
-        if ($telegram->isEnabled()) {
-            $telegram->notifyProxiesFound($fetchResult['count']);
+// Auto-fetch proxies if needed (opt-in for performance)
+$autoFetchEnabled = parse_bool_flag(getenv('AUTOSH_AUTO_FETCH'), false);
+if (isset($_GET['autofetch'])) {
+    $autoFetchEnabled = parse_bool_flag($_GET['autofetch'], $autoFetchEnabled);
+}
+
+if ($autoFetchEnabled) {
+    $autoFetcher = new AutoProxyFetcher([
+        'debug' => isset($_GET['debug']),
+        'minProxies' => isset($_GET['autofetch_min']) && is_numeric($_GET['autofetch_min'])
+            ? max(1, (int)$_GET['autofetch_min'])
+            : 5,
+        'fetchTimeout' => isset($_GET['autofetch_timeout']) && is_numeric($_GET['autofetch_timeout'])
+            ? max(5, (int)$_GET['autofetch_timeout'])
+            : 25,
+    ]);
+    if ($autoFetcher->needsFetch()) {
+        error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
+        $fetchResult = $autoFetcher->ensureProxies();
+        if (!empty($fetchResult['success']) && !empty($fetchResult['fetched'])) {
+            error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
+
+            // Notify via Telegram if enabled
+            if ($telegram->isEnabled()) {
+                $telegram->notifyProxiesFound($fetchResult['count']);
+            }
+        } elseif (isset($_GET['debug'])) {
+            $reason = $fetchResult['error'] ?? 'Unknown reason';
+            error_log("[AutoFetch] Fetch attempt failed or skipped: {$reason}");
         }
     }
+} elseif (isset($_GET['debug'])) {
+    error_log("[AutoFetch] Skipped automatic proxy download (disabled). Provide ?autofetch=1 to enable.");
 }
 
 $__pm = new ProxyManager();
@@ -207,7 +282,7 @@ function transform_rotating_username(string $user): string {
     }
     $country = isset($_GET['country']) ? strtolower(trim((string)$_GET['country'])) : '';
     // session token
-    $sess = substr(bin2hex(random_bytes(4)), 0, 8);
+    $sess = generate_session_token(4);
     if (strpos($u, '{session}') !== false) {
         $u = str_replace('{session}', $sess, $u);
     } elseif ($rotate && $u !== '' && strpos($u, 'session-') === false) {
@@ -3971,9 +4046,9 @@ if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
 }
 
 // echo "<li>CheckoutUrl: $checkouturl<li>";
-$file = "cc_responses.txt";
-$handle = fopen($file, "a");
+$file = 'cc_responses.txt';
 $content = "cc = $cc1\nresponse = $response5\n\n";
+@file_put_contents($file, $content, FILE_APPEND);
 $r5js = (json_decode($response5));
 $start_time = microtime(true);
 
@@ -4030,8 +4105,6 @@ strpos($response5, 'classicThankYouPageUrl') ||
 strpos($response5, '"__typename":"ProcessedReceipt"') ||
 strpos($response5, 'SUCCESS')
 ) {
-// fwrite($handle, $content);
-// fclose($handle);
 $err = 'Thank You ' . $totalamt;
 $response_type = 'Thank You';
 $time_taken = round(microtime(true) - $start_time, 2);
@@ -4157,8 +4230,6 @@ if ($err != 'incorrect_zip') {
 send_final_response(json_decode($result, true), $proxy_used, $proxy_ip, $proxy_port);
 exit;
 } else {
-// fwrite($handle, $content);
-// fclose($handle);
 $err = 'Response Not Found';
 $time_taken = round(microtime(true) - $start_time, 2);
 $log_message = "<b>Response Not Found ?</b>\n" .
