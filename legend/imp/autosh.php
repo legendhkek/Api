@@ -3,6 +3,13 @@ error_reporting(E_ALL & ~E_DEPRECATED);
 // Extend script execution limit to avoid premature fatal timeouts during network calls
 @set_time_limit(300);
 
+if (!defined('AUTOSH_DEFAULT_CONNECT_TIMEOUT')) {
+    define('AUTOSH_DEFAULT_CONNECT_TIMEOUT', 4);
+}
+if (!defined('AUTOSH_DEFAULT_TOTAL_TIMEOUT')) {
+    define('AUTOSH_DEFAULT_TOTAL_TIMEOUT', 30);
+}
+
 // Environment sanity check: require cURL extension
 if (!extension_loaded('curl')) {
     header('Content-Type: application/json');
@@ -369,8 +376,16 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
+    $ctoDefault = defined('AUTOSH_DEFAULT_CONNECT_TIMEOUT') ? AUTOSH_DEFAULT_CONNECT_TIMEOUT : 4;
+    $toDefault  = defined('AUTOSH_DEFAULT_TOTAL_TIMEOUT') ? AUTOSH_DEFAULT_TOTAL_TIMEOUT : 30;
+    if (($envCto = getenv('AUTOSH_CONNECT_TIMEOUT')) !== false && is_numeric($envCto)) {
+        $ctoDefault = max(1, (int)$envCto);
+    }
+    if (($envTo = getenv('AUTOSH_TOTAL_TIMEOUT')) !== false && is_numeric($envTo)) {
+        $toDefault = max(3, (int)$envTo);
+    }
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : max(1, (int)$ctoDefault);   // connect timeout seconds (optimized from 5 to 4)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : max(3, (int)$toDefault);  // total timeout seconds
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
@@ -378,13 +393,21 @@ function runtime_cfg(): array {
 }
 
 // Apply common timeouts and perf flags to a curl handle
-function apply_common_timeouts($ch): void {
+function apply_common_timeouts($ch, ?int $connectTimeoutOverride = null, ?int $timeoutOverride = null): void {
     $cfg = runtime_cfg();
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $cfg['cto']);
-    curl_setopt($ch, CURLOPT_TIMEOUT, $cfg['to']);
+    $connectTimeout = $connectTimeoutOverride ?? $cfg['cto'];
+    $totalTimeout   = $timeoutOverride ?? $cfg['to'];
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, max(1, (int)$connectTimeout));
+    curl_setopt($ch, CURLOPT_TIMEOUT, max(1, (int)$totalTimeout));
     curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
     curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+    if (defined('CURLOPT_NOSIGNAL')) {
+        curl_setopt($ch, CURLOPT_NOSIGNAL, true);
+    }
+    if (defined('CURLOPT_EXPECT_100_TIMEOUT_MS')) {
+        curl_setopt($ch, CURLOPT_EXPECT_100_TIMEOUT_MS, 0);
+    }
     // Relax SSL verification to avoid self-signed chain issues when proxied
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -2076,8 +2099,7 @@ function http_get_with_proxy(string $url, ?string $cookieFile = null, array $hea
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    apply_common_timeouts($ch);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     if ($cookieFile) {
@@ -2100,15 +2122,14 @@ function http_get_with_proxy(string $url, ?string $cookieFile = null, array $hea
 
 // Parallel HTTP GET for multiple URLs (same headers/cookies) using curl_multi
 // Returns assoc array url => [body, code]
-function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5): array {
+function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, array $headers = [], ?int $timeout = null, ?int $connectTimeout = null): array {
     $mh = curl_multi_init();
     $handles = [];
     foreach ($urls as $url) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+        apply_common_timeouts($ch, $connectTimeout, $timeout);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         if ($cookieFile) {
@@ -2122,10 +2143,6 @@ function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, arra
             'Connection: keep-alive'
         ];
         curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge($defaultHeaders, $headers));
-        // Apply proxy and performance flags similar to http_get_with_proxy
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
-        curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
         apply_proxy_if_used($ch, $url);
 
         curl_multi_add_handle($mh, $ch);
@@ -2156,7 +2173,7 @@ function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, arra
 }
 
 // Chunked variant: fetch many URLs in batches to limit concurrency (default batch size 8)
-function multi_http_get_with_proxy_chunked(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5, int $batchSize = 8): array {
+function multi_http_get_with_proxy_chunked(array $urls, ?string $cookieFile = null, array $headers = [], ?int $timeout = null, ?int $connectTimeout = null, int $batchSize = 8): array {
     $out = [];
     if ($batchSize <= 1) { return multi_http_get_with_proxy($urls, $cookieFile, $headers, $timeout, $connectTimeout); }
     $chunks = array_chunk($urls, $batchSize);
@@ -2289,8 +2306,9 @@ function fetch_products_by_handles(string $baseUrl, array $handles, ?string $coo
     }
     if (empty($urls)) return $products;
 
-    // Fetch in batches in parallel (batch size 8), with unchanged timeout values
-    $results = multi_http_get_with_proxy_chunked($urls, $cookieFile, [], 10, 5, 8);
+    // Fetch in batches in parallel (batch size 8), honouring the runtime timeout configuration
+    $cfg = runtime_cfg();
+    $results = multi_http_get_with_proxy_chunked($urls, $cookieFile, [], $cfg['to'], $cfg['cto'], 8);
     foreach ($urls as $u) {
         if (!isset($results[$u])) continue;
         [$body, $code] = $results[$u];
