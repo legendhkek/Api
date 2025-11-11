@@ -369,8 +369,8 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 5;   // connect timeout seconds (optimized for speed)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 30;  // total timeout seconds (increased to 30)
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
@@ -384,7 +384,7 @@ function apply_common_timeouts($ch): void {
     curl_setopt($ch, CURLOPT_TIMEOUT, $cfg['to']);
     curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
-    curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 300);
     // Relax SSL verification to avoid self-signed chain issues when proxied
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -1129,8 +1129,8 @@ function check_cc_bin(string $cc_number): array {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $api_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: application/json',
             'User-Agent: Mozilla/5.0'
@@ -1286,9 +1286,9 @@ function test_proxy_url(string $ip, string $port, string $username = '', string 
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
     // SOCKS proxies need more time for SSL connections
-    $timeout = ($type === 'socks4' || $type === 'socks5') ? 10 : 5;
+    $timeout = ($type === 'socks4' || $type === 'socks5') ? 15 : 10;
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout * 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1595,9 +1595,9 @@ function proxy_can_reach_url(string $proxyStr, string $url, int $timeout = 5): b
         curl_setopt($ch, CURLOPT_PROXYUSERPWD, $u . ':' . $pc['pass']);
     }
 
-    // Adjust timeouts: SOCKS often needs more time
-    $actualTimeout = ($type === 'socks4' || $type === 'socks5') ? ($timeout * 2) : $timeout;
-    curl_setopt($ch, CURLOPT_TIMEOUT, $actualTimeout);
+    // Adjust timeouts: SOCKS often needs more time, increased to 30s total
+    $actualTimeout = ($type === 'socks4' || $type === 'socks5') ? 15 : 10;
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $actualTimeout);
 
     // Enable CONNECT only for HTTPS targets when using HTTP/HTTPS proxies
@@ -2076,8 +2076,8 @@ function http_get_with_proxy(string $url, ?string $cookieFile = null, array $hea
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     if ($cookieFile) {
@@ -2100,7 +2100,7 @@ function http_get_with_proxy(string $url, ?string $cookieFile = null, array $hea
 
 // Parallel HTTP GET for multiple URLs (same headers/cookies) using curl_multi
 // Returns assoc array url => [body, code]
-function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5): array {
+function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 30, int $connectTimeout = 10): array {
     $mh = curl_multi_init();
     $handles = [];
     foreach ($urls as $url) {
@@ -2125,7 +2125,7 @@ function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, arra
         // Apply proxy and performance flags similar to http_get_with_proxy
         curl_setopt($ch, CURLOPT_ENCODING, '');
         curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
-        curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 300);
         apply_proxy_if_used($ch, $url);
 
         curl_multi_add_handle($mh, $ch);
@@ -2156,7 +2156,7 @@ function multi_http_get_with_proxy(array $urls, ?string $cookieFile = null, arra
 }
 
 // Chunked variant: fetch many URLs in batches to limit concurrency (default batch size 8)
-function multi_http_get_with_proxy_chunked(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 10, int $connectTimeout = 5, int $batchSize = 8): array {
+function multi_http_get_with_proxy_chunked(array $urls, ?string $cookieFile = null, array $headers = [], int $timeout = 30, int $connectTimeout = 10, int $batchSize = 8): array {
     $out = [];
     if ($batchSize <= 1) { return multi_http_get_with_proxy($urls, $cookieFile, $headers, $timeout, $connectTimeout); }
     $chunks = array_chunk($urls, $batchSize);
@@ -2289,8 +2289,8 @@ function fetch_products_by_handles(string $baseUrl, array $handles, ?string $coo
     }
     if (empty($urls)) return $products;
 
-    // Fetch in batches in parallel (batch size 8), with unchanged timeout values
-    $results = multi_http_get_with_proxy_chunked($urls, $cookieFile, [], 10, 5, 8);
+    // Fetch in batches in parallel (batch size 8), with optimized timeout values
+    $results = multi_http_get_with_proxy_chunked($urls, $cookieFile, [], 30, 10, 8);
     foreach ($urls as $u) {
         if (!isset($results[$u])) continue;
         [$body, $code] = $results[$u];
