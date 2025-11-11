@@ -22,7 +22,36 @@ require_once 'ho.php';
 $agent = new userAgent();
 $ua = $agent->generate('windows');
 
+// Include add.php and no.php early (like old version) for faster initialization
+if (!file_exists('add.php')) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'add.php file not found']);
+    exit;
+}
+require_once 'add.php';
+$num_us = $randomAddress['numd'];
+$address_us = $randomAddress['address1'];
+$address = $num_us.' '.$address_us;
+$city_us = $randomAddress['city'];
+$state_us = $randomAddress['state'];
+$zip_us = $randomAddress['zip'];
+
+if (!file_exists('no.php')) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'no.php file not found']);
+    exit;
+}
+require_once 'no.php';
+$areaCode = $areaCodes[array_rand($areaCodes)];
+$phone = sprintf("+1%d%03d%04d", $areaCode, rand(200, 999), rand(1000, 9999));
+
 // Proxy rotation setup: use ProxyManager to rotate proxy each request when available
+// Lazy-load these only when needed to improve initial load speed
+if (!file_exists('ProxyManager.php')) {
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'ProxyManager.php file not found']);
+    exit;
+}
 require_once 'ProxyManager.php';
 require_once 'AutoProxyFetcher.php';
 require_once 'CaptchaSolver.php';
@@ -46,22 +75,22 @@ if (!function_exists('request_string')) {
     }
 }
 
-// Initialize advanced systems
+// Initialize advanced systems (optimized for speed)
 $analytics = new ProxyAnalytics();
 $telegram = new TelegramNotifier();
 $advancedCaptchaSolver = new AdvancedCaptchaSolver(isset($_GET['debug']));
 
-// Auto-fetch proxies if needed
-$autoFetcher = new AutoProxyFetcher(['debug' => isset($_GET['debug'])]);
-if ($autoFetcher->needsFetch()) {
-    error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
-    $fetchResult = $autoFetcher->ensureProxies();
-    if ($fetchResult['success'] && $fetchResult['fetched']) {
-        error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
-        
-        // Notify via Telegram if enabled
-        if ($telegram->isEnabled()) {
-            $telegram->notifyProxiesFound($fetchResult['count']);
+// Auto-fetch proxies if needed (only check if ProxyList.txt is missing or very small)
+if (!file_exists('ProxyList.txt') || filesize('ProxyList.txt') < 10) {
+    $autoFetcher = new AutoProxyFetcher(['debug' => isset($_GET['debug'])]);
+    if ($autoFetcher->needsFetch()) {
+        error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
+        $fetchResult = $autoFetcher->ensureProxies();
+        if ($fetchResult['success'] && $fetchResult['fetched']) {
+            error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
+            if ($telegram->isEnabled()) {
+                $telegram->notifyProxiesFound($fetchResult['count']);
+            }
         }
     }
 }
@@ -69,7 +98,7 @@ if ($autoFetcher->needsFetch()) {
 $__pm = new ProxyManager();
 $__pm_count = file_exists('ProxyList.txt') ? $__pm->loadFromFile('ProxyList.txt') : 0;
 
-// Configure rate limiting (enabled by default)
+// Configure rate limiting (enabled by default) - optimized
 $__pm->setRateLimitDetection(true);
 $__pm->setAutoRotateOnRateLimit(true);
 
@@ -89,8 +118,6 @@ if (isset($_GET['max_rate_limit_retries']) && is_numeric($_GET['max_rate_limit_r
 
 if (isset($_GET['debug'])) {
     error_log("[DEBUG] Loaded $__pm_count proxies from ProxyList.txt");
-    error_log("[DEBUG] Rate limiting detection: enabled");
-    error_log("[DEBUG] Auto-rotate on rate limit: enabled");
 }
 
 // Initialize captcha solver (use advanced solver)
@@ -229,14 +256,6 @@ if (!empty($__requested_site_param)) {
     }
 }
 
-require_once 'add.php';
-$num_us = $randomAddress['numd'];
-$address_us = $randomAddress['address1'];
-$address = $num_us.' '.$address_us;
-$city_us = $randomAddress['city'];
-$state_us = $randomAddress['state'];
-$zip_us = $randomAddress['zip'];
-
 $inputStreetAddress = request_string('street_address');
 $inputStreetAddress2 = request_string('street_address2');
 $inputCity = request_string('city');
@@ -277,7 +296,6 @@ if ($customAddressProvided) {
 }
 $country_code = $inputCountry;
 
-require_once 'no.php';
 $inputPhone = request_string('phone');
 if ($inputPhone !== '') {
     $phone = $inputPhone;
@@ -289,13 +307,14 @@ if ($inputPhone !== '') {
 // Important functions start
 // Lightweight embedded utilities: CaptchaSolver and GatewayDetector
 // Pull runtime config from query (optional): cto, to, sleep, v4
+// Optimized defaults for faster execution
 function runtime_cfg(): array {
     static $cache = null;
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 3;   // connect timeout seconds (optimized from 4 to 3)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 12;  // total timeout seconds (optimized from 15 to 12)
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
