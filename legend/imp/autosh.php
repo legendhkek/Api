@@ -370,7 +370,7 @@ function runtime_cfg(): array {
         return $cache;
     }
     $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 30;  // total timeout seconds (increased to 30)
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
@@ -388,8 +388,15 @@ function apply_common_timeouts($ch): void {
     // Relax SSL verification to avoid self-signed chain issues when proxied
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    // Performance optimizations
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, false); // Reuse connections
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, false); // Allow connection reuse
     if ($cfg['v4'] && defined('CURL_IPRESOLVE_V4')) {
         curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    }
+    // Enable HTTP/2 if available (faster)
+    if (defined('CURL_HTTP_VERSION_2_0')) {
+        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
     }
 }
 if (!class_exists('CaptchaSolver')) {
@@ -1129,8 +1136,8 @@ function check_cc_bin(string $cc_number): array {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $api_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: application/json',
             'User-Agent: Mozilla/5.0'
@@ -4027,7 +4034,7 @@ if ($curlErr) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    sleep(1); // Wait 1 second before retrying (optimized)
+    usleep(500000); // Wait 0.5 second before retrying (optimized for speed)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
@@ -4036,7 +4043,7 @@ if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
     }
 }
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    sleep(1); // Wait 1 second before retrying (optimized)
+    usleep(500000); // Wait 0.5 second before retrying (optimized for speed)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
