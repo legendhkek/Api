@@ -369,8 +369,8 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 4;   // connect timeout seconds (optimized from 5 to 4)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 15;  // total timeout seconds
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 6;   // connect timeout seconds (increased for reliability)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 30;  // total timeout seconds (increased to 30s)
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
