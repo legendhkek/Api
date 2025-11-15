@@ -126,19 +126,21 @@ function build_autosh_endpoint(): ?string {
     return $scheme . '://' . $_SERVER['HTTP_HOST'] . $basePath . '/autosh.php';
 }
 
-function call_autosh(string $endpoint, array $params, int $timeout = 150): array {
+function call_autosh(string $endpoint, array $params, int $timeout = 120): array {
     $start = microtime(true);
     $url = $endpoint . (strpos($endpoint, '?') === false ? '?' : '&') . http_build_query($params);
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 15,
         CURLOPT_TIMEOUT => $timeout,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false,
         CURLOPT_HEADER => false,
         CURLOPT_USERAGENT => $_SERVER['HTTP_USER_AGENT'] ?? 'HIT-AutoSh/1.0',
+        CURLOPT_TCP_NODELAY => true,
+        CURLOPT_FORBID_REUSE => false,
     ]);
     $body = curl_exec($ch);
     $errno = curl_errno($ch);
@@ -933,7 +935,6 @@ ksort($currencies);
                             </div>
                             <span class="status-badge <?= htmlspecialchars($badgeClass) ?>"><?= htmlspecialchars($status) ?></span>
                         </div>
-                        <div class="result-meta"
                         <div class="result-meta">
                             <div>
                                 <span class="label">Message</span>
