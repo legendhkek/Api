@@ -14,7 +14,7 @@ if (!extension_loaded('curl')) {
     exit;
 }
 
-$maxRetries = 5;
+$maxRetries = 3; // Reduced from 5 to 3 for faster failure
 $retryCount = 0;
 $start_time = microtime(true);
 
@@ -369,8 +369,8 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 6;   // connect timeout seconds (increased for reliability)
-    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 30;  // total timeout seconds (increased to 30s)
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 5;   // connect timeout seconds (optimized for speed)
+    $to  = isset($_GET['to'])  ? max(3, (int)$_GET['to'])  : 20;  // total timeout seconds (optimized to 20s)
     $slp = isset($_GET['sleep']) ? max(0, (int)$_GET['sleep']) : 0; // sleep seconds between phases (default 0 for speed)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4];
@@ -384,7 +384,10 @@ function apply_common_timeouts($ch): void {
     curl_setopt($ch, CURLOPT_TIMEOUT, $cfg['to']);
     curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
-    curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_TCP_FASTOPEN, true);
+    curl_setopt($ch, CURLOPT_DNS_CACHE_TIMEOUT, 120);
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, false);
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, false);
     // Relax SSL verification to avoid self-signed chain issues when proxied
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -1285,8 +1288,8 @@ function test_proxy_url(string $ip, string $port, string $username = '', string 
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-    // SOCKS proxies need more time for SSL connections
-    $timeout = ($type === 'socks4' || $type === 'socks5') ? 10 : 5;
+    // Optimized timeouts for faster proxy testing
+    $timeout = ($type === 'socks4' || $type === 'socks5') ? 7 : 4;
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
     curl_setopt($ch, CURLOPT_TIMEOUT, $timeout * 2);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -4027,7 +4030,7 @@ if ($curlErr) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    sleep(1); // Wait 1 second before retrying (optimized)
+    usleep(500000); // Wait 0.5 seconds before retrying (optimized for speed)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
@@ -4036,7 +4039,7 @@ if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
     }
 }
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    sleep(1); // Wait 1 second before retrying (optimized)
+    usleep(500000); // Wait 0.5 seconds before retrying (optimized for speed)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
