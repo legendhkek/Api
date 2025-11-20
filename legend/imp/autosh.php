@@ -14,7 +14,7 @@ if (!extension_loaded('curl')) {
     exit;
 }
 
-$maxRetries = 1; // Hyper-aggressive: 1 retry for maximum speed
+$maxRetries = 2; // Optimized: 2 retries max for speed + reliability balance
 $retryCount = 0;
 $start_time = microtime(true);
 
@@ -118,39 +118,22 @@ if (isset($_GET['captcha_key'])) {
 }
 $twoCaptchaSolver = new TwoCaptchaSolver($twoCaptchaApiKey, isset($_GET['debug']));
 
-// Auto-fetch proxies if needed (opt-in for performance)
-$autoFetchEnabled = parse_bool_flag(getenv('AUTOSH_AUTO_FETCH'), false);
-if (isset($_GET['autofetch'])) {
-    $autoFetchEnabled = parse_bool_flag($_GET['autofetch'], $autoFetchEnabled);
-}
-
-if ($autoFetchEnabled) {
+// Auto-fetch proxies DISABLED BY DEFAULT for maximum speed
+// User should provide proxy via ?proxy= parameter or manually populate ProxyList.txt
+$autoFetchEnabled = false;
+if (isset($_GET['autofetch']) && $_GET['autofetch'] === '1') {
+    $autoFetchEnabled = true;
     $autoFetcher = new AutoProxyFetcher([
         'debug' => isset($_GET['debug']),
-        'minProxies' => isset($_GET['autofetch_min']) && is_numeric($_GET['autofetch_min'])
-            ? max(1, (int)$_GET['autofetch_min'])
-            : 5,
-        'fetchTimeout' => isset($_GET['autofetch_timeout']) && is_numeric($_GET['autofetch_timeout'])
-            ? max(5, (int)$_GET['autofetch_timeout'])
-            : 25,
+        'minProxies' => 5,
+        'fetchTimeout' => 15,
     ]);
     if ($autoFetcher->needsFetch()) {
-        error_log("[AutoFetch] Proxy list is empty or stale, fetching automatically...");
         $fetchResult = $autoFetcher->ensureProxies();
-        if (!empty($fetchResult['success']) && !empty($fetchResult['fetched'])) {
-            error_log("[AutoFetch] Successfully fetched {$fetchResult['count']} proxies");
-
-            // Notify via Telegram if enabled
-            if ($telegram->isEnabled()) {
-                $telegram->notifyProxiesFound($fetchResult['count']);
-            }
-        } elseif (isset($_GET['debug'])) {
-            $reason = $fetchResult['error'] ?? 'Unknown reason';
-            error_log("[AutoFetch] Fetch attempt failed or skipped: {$reason}");
+        if (!empty($fetchResult['success']) && isset($_GET['debug'])) {
+            error_log("[AutoFetch] Fetched {$fetchResult['count']} proxies");
         }
     }
-} elseif (isset($_GET['debug'])) {
-    error_log("[AutoFetch] Skipped automatic proxy download (disabled). Provide ?autofetch=1 to enable.");
 }
 
 $__pm = new ProxyManager();
@@ -403,19 +386,18 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    // HYPER-FAST: Maximum speed optimizations (even more aggressive)
-    // For sites that block product discovery, reduce timeouts further
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 1;   // connect timeout: 1s (HYPER-fast)
-    $to  = isset($_GET['to'])  ? max(1, (int)$_GET['to'])  : 2;   // total timeout: 2s (reduced from 5s for faster failures)
-    // IMPORTANT: Default sleep is 0.2 seconds for faster responses (was 1)
-    // Some payment processors need this delay between proposal/receipt/poll steps
-    // Set to 0 for maximum speed: ?sleep=0 (may cause payment failures on some sites)
-    // Increase for problematic sites: ?sleep=2
-    $slp = isset($_GET['sleep']) ? max(0, (float)$_GET['sleep']) : 0.2; // sleep seconds between phases (0.2 for speed)
-    $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4 (often faster on some ISPs)
-    $fastFail = isset($_GET['fast_fail']) ? (bool)$_GET['fast_fail'] : true; // fail fast on errors
-    $quickAbort = isset($_GET['quick_abort']) ? (bool)$_GET['quick_abort'] : true; // abort on first success
-    $maxStrategies = isset($_GET['max_strategies']) ? max(1, (int)$_GET['max_strategies']) : 2; // limit fallback strategies for speed (reduced from 3 to 2)
+    // ULTRA-FAST: Optimized for fastest response times
+    // Connect timeout: 3s (balanced for reliability)
+    // Total timeout: 10s (enough for most checkout flows)
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 3;   // connect timeout: 3s
+    $to  = isset($_GET['to'])  ? max(5, (int)$_GET['to'])  : 10;  // total timeout: 10s
+    // Sleep between phases reduced to 0.1s for maximum speed
+    // Increase if you experience payment processor timeouts: ?sleep=0.5
+    $slp = isset($_GET['sleep']) ? max(0, (float)$_GET['sleep']) : 0.1; // sleep seconds between phases
+    $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4
+    $fastFail = isset($_GET['fast_fail']) ? (bool)$_GET['fast_fail'] : true;
+    $quickAbort = isset($_GET['quick_abort']) ? (bool)$_GET['quick_abort'] : true;
+    $maxStrategies = isset($_GET['max_strategies']) ? max(1, (int)$_GET['max_strategies']) : 2;
     $cache = ['cto'=>$cto,'to'=>$to,'sleep'=>$slp,'v4'=>$v4,'fast_fail'=>$fastFail,'quick_abort'=>$quickAbort,'max_strategies'=>$maxStrategies];
     return $cache;
 }
