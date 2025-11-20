@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Quick sanity: cURL constants",
+			"type": "shell",
+			"command": "\"C:\\xampp\\php\\php.exe\" -r \"$ok=defined('CURLPROXY_HTTP')&&defined('CURLPROXY_SOCKS4')&&defined('CURLPROXY_SOCKS5'); echo $ok? 'OK' : 'MISSING';\"",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		}
+	]
+}

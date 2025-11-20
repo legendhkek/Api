@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /fetch_proxies.php
+Disallow: /proxy_cache_refresh.php
+Disallow: /test_specific_proxy.php

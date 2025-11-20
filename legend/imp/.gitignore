@@ -1,0 +1,15 @@
+# Temporary cookie files
+cookie_*.txt
+cookie.txt
+
+# Log files
+*.log
+proxy_*.log
+cc_responses.txt
+
+# Database files
+*.db
+
+# Test files (if recreated)
+test_*.php
+test_*.sh

@@ -1,0 +1,39 @@
+╔════════════════════════════════════════════════════════════════╗
+║              SYSTEM OWNERSHIP INFORMATION                      ║
+╚════════════════════════════════════════════════════════════════╝
+
+Owner: @LEGEND_BL
+
+This Advanced Proxy Management System is owned and operated by:
+
+    Telegram: @LEGEND_BL
+
+All rights reserved.
+
+═══════════════════════════════════════════════════════════════════
+
+System Information:
+-------------------
+- Name: Advanced Proxy Management System
+- Version: 3.0.0
+- Last Updated: 2025-11-10
+- Owner: @LEGEND_BL
+
+Features:
+---------
+✓ ML-Based Proxy Quality Scoring
+✓ Advanced Captcha Solving (Math, Image, hCaptcha)
+✓ Auto-Fetch System
+✓ Geographic & ISP Filtering
+✓ Health Monitoring
+✓ Telegram Notifications
+✓ REST API with Authentication
+✓ WebSocket Real-Time Dashboard
+✓ Performance Analytics
+
+Contact:
+--------
+For support or inquiries, contact the owner:
+Telegram: @LEGEND_BL
+
+═══════════════════════════════════════════════════════════════════

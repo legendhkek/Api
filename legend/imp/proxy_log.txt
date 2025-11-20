@@ -1,0 +1,676 @@
+[2025-10-18 11:37:19] Loaded 0 proxies from file
+[2025-10-18 11:37:19] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 11:37:21] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2036 ms: Couldn't connect to server
+[2025-10-18 11:37:26] ✗ Proxy health check failed: http://proxy1.example.com:8080 - HTTP 0 - Could not resolve proxy: proxy1.example.com
+[2025-10-18 11:37:29] ✗ Proxy health check failed: tor://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2047 ms: Couldn't connect to server
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: tor://127.0.0.1:9050
+[2025-10-18 11:37:29] ✗ Proxy health check failed: http://proxy1.example.com:8080 - HTTP 0 - Could not resolve proxy: proxy1.example.com
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: http://proxy1.example.com:8080
+[2025-10-18 11:37:29] ✗ Proxy health check failed: https://proxy2.example.com:443 - HTTP 0 - Could not resolve proxy: proxy2.example.com
+[2025-10-18 11:37:29] ✗ Marked proxy as DEAD: https://proxy2.example.com:443
+[2025-10-18 11:37:30] ✗ Proxy health check failed: socks5://proxy3.example.com:1080 - HTTP 0 - Could not resolve host: proxy3.example.com
+[2025-10-18 11:37:30] ✗ Marked proxy as DEAD: socks5://proxy3.example.com:1080
+[2025-10-18 11:37:30] ✗ Proxy health check failed: socks4://proxy4.example.com:1080 - HTTP 0 - Could not resolve host: proxy4.example.com
+[2025-10-18 11:37:30] ✗ Marked proxy as DEAD: socks4://proxy4.example.com:1080
+[2025-10-18 11:37:30] ERROR: All proxies are dead or unavailable
+[2025-10-18 11:37:30] ERROR: No available proxy for retry attempt 1
+[2025-10-18 11:37:30] Reset 5 dead proxies - all proxies re-enabled
+[2025-10-18 11:37:32] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - HTTP 0 - Failed to connect to 127.0.0.1 port 9050 after 2036 ms: Couldn't connect to server
+[2025-10-18 11:37:32] ✗ Marked proxy as DEAD: socks5://127.0.0.1:9050
+[2025-10-18 11:37:33] ✗ Proxy health check failed: http://my-proxy.com:8080 - HTTP 403 - 
+[2025-10-18 11:37:33] ✗ Marked proxy as DEAD: http://my-proxy.com:8080
+[2025-10-18 11:37:33] ERROR: All proxies are dead or unavailable
+[2025-10-18 11:56:39] Loaded 1 proxies from file
+[2025-10-18 11:56:39] ERROR: Invalid proxy format: http://dead-proxy-test.invalid:9999
+[2025-10-18 11:56:39] ERROR: No proxies available
+[2025-10-18 11:56:39] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 11:56:41] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2042 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 14:05:41] Loaded 20 proxies from file
+[2025-10-18 14:05:41] ERROR: Invalid proxy format: http://dead-proxy-test.invalid:9999
+[2025-10-18 14:05:41] ERROR: No proxies available
+[2025-10-18 14:05:41] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 14:05:43] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2035 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 14:46:16] Loaded 35 proxies from file
+[2025-10-18 14:46:16] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 14:46:18] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2032 ms: Couldn't connect to server (Code: 7)
+[2025-10-18 15:17:40] Loaded 35 proxies from file
+[2025-10-18 15:17:40] Reset 0 dead proxies - all proxies re-enabled
+[2025-10-18 15:17:42] ✗ Proxy health check failed: socks5://127.0.0.1:9050 - Error: Failed to connect to 127.0.0.1 port 9050 after 2017 ms: Couldn't connect to server (Code: 7)
+[2025-10-19 10:06:38] Loaded 5 proxies from file
+[2025-10-19 10:25:48] Loaded 5 proxies from file
+[2025-10-19 10:26:19] Loaded 5 proxies from file
+[2025-10-19 10:30:29] Loaded 5 proxies from file
+[2025-10-19 10:32:03] Loaded 5 proxies from file
+[2025-10-19 10:32:32] Loaded 5 proxies from file
+[2025-10-19 10:39:17] Loaded 5 proxies from file
+[2025-10-19 10:40:37] Loaded 5 proxies from file
+[2025-10-19 10:40:51] Loaded 5 proxies from file
+[2025-10-19 10:41:08] Loaded 5 proxies from file
+[2025-10-19 10:42:40] Loaded 5 proxies from file
+[2025-10-19 10:42:58] Loaded 5 proxies from file
+[2025-10-19 10:48:23] Loaded 5 proxies from file
+[2025-10-19 10:48:40] Loaded 5 proxies from file
+[2025-10-19 10:51:59] Loaded 5 proxies from file
+[2025-10-19 11:16:46] Loaded 5 proxies from file
+[2025-10-19 11:26:08] Loaded 5 proxies from file
+[2025-10-19 11:28:02] Loaded 5 proxies from file
+[2025-10-19 11:31:21] Loaded 5 proxies from file
+[2025-10-19 11:33:53] Loaded 5 proxies from file
+[2025-10-19 11:34:05] Loaded 5 proxies from file
+[2025-10-19 11:34:25] Loaded 5 proxies from file
+[2025-10-19 11:37:58] Loaded 5 proxies from file
+[2025-10-19 11:38:57] Loaded 5 proxies from file
+[2025-10-19 11:39:05] Loaded 5 proxies from file
+[2025-10-19 11:39:24] Loaded 5 proxies from file
+[2025-10-19 11:47:31] Loaded 5 proxies from file
+[2025-10-19 11:48:27] Loaded 5 proxies from file
+[2025-10-19 11:48:49] Loaded 5 proxies from file
+[2025-10-19 11:49:04] Loaded 5 proxies from file
+[2025-10-19 11:49:40] Loaded 5 proxies from file
+[2025-10-19 11:50:08] Loaded 5 proxies from file
+[2025-10-19 11:51:22] Loaded 5 proxies from file
+[2025-10-19 11:54:23] Loaded 5 proxies from file
+[2025-10-19 11:55:34] Loaded 5 proxies from file
+[2025-10-19 11:56:30] Loaded 5 proxies from file
+[2025-10-19 12:03:40] Loaded 5 proxies from file
+[2025-10-19 12:04:38] Loaded 5 proxies from file
+[2025-10-19 12:05:56] Loaded 5 proxies from file
+[2025-10-19 12:06:14] Loaded 5 proxies from file
+[2025-10-19 12:06:25] Loaded 5 proxies from file
+[2025-10-19 12:07:13] Loaded 5 proxies from file
+[2025-10-19 12:08:09] Loaded 5 proxies from file
+[2025-10-19 12:24:09] Loaded 5 proxies from file
+[2025-10-19 12:39:28] Loaded 30 proxies from file
+[2025-10-19 12:40:48] Loaded 30 proxies from file
+[2025-10-19 12:41:29] Loaded 30 proxies from file
+[2025-10-19 12:57:21] Loaded 36 proxies from file
+[2025-10-19 12:57:58] Loaded 36 proxies from file
+[2025-10-19 13:00:25] Loaded 36 proxies from file
+[2025-10-19 13:05:03] Loaded 36 proxies from file
+[2025-10-19 13:06:04] Loaded 36 proxies from file
+[2025-10-19 13:07:44] Loaded 36 proxies from file
+[2025-10-19 13:21:33] Loaded 36 proxies from file
+[2025-10-19 13:41:52] Loaded 37 proxies from file
+[2025-10-19 13:42:04] Loaded 38 proxies from file
+[2025-10-19 13:48:53] Loaded 38 proxies from file
+[2025-10-21 07:01:47] Loaded 38 proxies from file
+[2025-10-21 07:02:32] Loaded 39 proxies from file
+[2025-10-21 07:02:41] Loaded 39 proxies from file
+[2025-10-21 07:03:08] Loaded 39 proxies from file
+[2025-10-21 07:04:38] Loaded 39 proxies from file
+[2025-10-21 07:04:46] Loaded 39 proxies from file
+[2025-10-21 07:20:44] Loaded 39 proxies from file
+[2025-10-21 07:21:09] Loaded 40 proxies from file
+[2025-10-21 07:23:28] Loaded 40 proxies from file
+[2025-10-21 07:35:57] Loaded 50 proxies from file
+[2025-10-21 07:37:00] Loaded 50 proxies from file
+[2025-10-21 07:37:56] Loaded 50 proxies from file
+[2025-10-21 07:40:08] Loaded 55 proxies from file
+[2025-10-21 07:41:05] Loaded 56 proxies from file
+[2025-10-21 07:41:37] Loaded 57 proxies from file
+[2025-10-21 07:41:45] Loaded 57 proxies from file
+[2025-10-21 07:43:27] Loaded 57 proxies from file
+[2025-10-21 07:43:42] Loaded 57 proxies from file
+[2025-10-21 07:45:09] Loaded 57 proxies from file
+[2025-10-21 07:46:27] Loaded 57 proxies from file
+[2025-10-21 07:48:26] Loaded 57 proxies from file
+[2025-10-21 07:49:25] Loaded 57 proxies from file
+[2025-11-10 15:01:17] Loaded 57 proxies from file
+[2025-11-10 15:03:29] Loaded 57 proxies from file
+[2025-11-10 15:03:42] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 15:03:42] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 15:03:46] ✓ Proxy health check passed: http://219.65.73.81:80 (3.8720910549164s)
+[2025-11-10 15:03:52] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.69323778152466s)
+[2025-11-10 15:06:02] Loaded 57 proxies from file
+[2025-11-10 15:06:06] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 15:06:06] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 15:06:11] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 15:06:11] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 15:06:12] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.70111703872681s)
+[2025-11-10 15:06:14] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (0.68338012695312s)
+[2025-11-10 15:06:17] ✓ Proxy health check passed: socks5://199.102.106.94:4145 (0.35973691940308s)
+[2025-11-10 15:06:23] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 15:06:23] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-10 15:06:23] ✓ Proxy health check passed: socks4://72.195.34.60:27391 (0.57969784736633s)
+[2025-11-10 15:06:24] ✓ Proxy health check passed: socks4://192.111.138.29:4145 (0.48992800712585s)
+[2025-11-10 15:06:28] ✓ Proxy health check passed: socks4://49.0.246.130:443 (4.3821518421173s)
+[2025-11-10 15:06:33] ✓ Proxy health check passed: socks4://192.111.134.10:4145 (0.32167291641235s)
+[2025-11-10 16:21:22] Loaded 57 proxies from file
+[2025-11-10 16:21:30] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:30] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:21:35] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:35] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 16:21:35] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.58992600440979s)
+[2025-11-10 16:21:37] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (0.66552400588989s)
+[2025-11-10 16:21:40] ✓ Proxy health check passed: socks5://199.102.106.94:4145 (0.23589110374451s)
+[2025-11-10 16:21:47] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:21:47] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-10 16:21:48] ✓ Proxy health check passed: socks4://72.195.34.60:27391 (0.69816207885742s)
+[2025-11-10 16:21:48] ✓ Proxy health check passed: socks4://192.111.138.29:4145 (0.51455020904541s)
+[2025-11-10 16:21:53] ✓ Proxy health check passed: socks4://49.0.246.130:443 (4.3547987937927s)
+[2025-11-10 16:21:59] ✓ Proxy health check passed: socks4://192.111.134.10:4145 (0.25470685958862s)
+[2025-11-10 16:22:06] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Failed to connect to 181.28.137.18 port 5678 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:06] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-10 16:22:11] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Failed to connect to 123.231.230.58 port 31196 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:11] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-10 16:22:16] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Failed to connect to 218.26.101.226 port 53813 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:22:16] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-10 16:22:19] ✓ Proxy health check passed: socks4://192.252.209.155:14455 (2.0236260890961s)
+[2025-11-10 16:22:21] ✓ Proxy health check passed: socks4://98.188.47.150:4145 (0.68669104576111s)
+[2025-11-10 16:22:24] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: connection to proxy closed (Code: 97)
+[2025-11-10 16:22:24] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-10 16:22:24] ✓ Proxy health check passed: socks4://198.8.94.170:4145 (0.44125699996948s)
+[2025-11-10 16:22:26] ✓ Proxy health check passed: socks4://184.178.172.14:4145 (0.55166912078857s)
+[2025-11-10 16:43:07] Loaded 57 proxies from file
+[2025-11-10 16:43:27] Loaded 57 proxies from file
+[2025-11-10 16:43:49] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-10 16:43:49] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:43:54] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:43:54] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-10 16:43:55] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.63328289985657s)
+[2025-11-10 16:43:57] ✓ Proxy health check passed: socks5://184.178.172.23:4145 (1.7221660614014s)
+[2025-11-10 16:44:07] Loaded 57 proxies from file
+[2025-11-10 16:44:24] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-10 16:44:24] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:44:28] ✓ Proxy health check passed: http://219.65.73.81:80 (4.054141998291s)
+[2025-11-10 16:44:34] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.68995308876038s)
+[2025-11-10 16:44:47] Loaded 57 proxies from file
+[2025-11-10 16:45:10] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Operation timed out after 10002 milliseconds with 0 bytes received (Code: 28)
+[2025-11-10 16:45:10] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-10 16:45:15] ✓ Proxy health check passed: http://219.65.73.81:80 (4.9963278770447s)
+[2025-11-10 16:45:21] ✓ Proxy health check passed: socks5://192.252.208.70:14282 (0.69082093238831s)
+[2025-11-15 14:08:25] Loaded 57 proxies from file
+[2025-11-15 14:10:36] Loaded 57 proxies from file
+[2025-11-16 05:04:46] Loaded 57 proxies from file
+[2025-11-16 05:05:03] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-16 05:05:03] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-16 06:06:41] Loaded 57 proxies from file
+[2025-11-16 06:06:46] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-16 06:06:46] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-16 06:06:51] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-16 06:06:51] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-16 06:06:56] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Failed to connect to 192.252.208.70 port 14282 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-16 06:06:56] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-18 08:40:40] Loaded 57 proxies from file
+[2025-11-18 08:41:52] Loaded 57 proxies from file
+[2025-11-18 08:42:12] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:12] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-18 08:42:17] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:17] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-18 08:42:22] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Failed to connect to 192.252.208.70 port 14282 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:22] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-18 08:42:27] ✗ Proxy health check failed: socks5://184.178.172.23:4145 - Error: Failed to connect to 184.178.172.23 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:27] ✗ Marked proxy as DEAD: socks5://184.178.172.23:4145
+[2025-11-18 08:42:32] ✗ Proxy health check failed: socks5://199.102.106.94:4145 - Error: Failed to connect to 199.102.106.94 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:32] ✗ Marked proxy as DEAD: socks5://199.102.106.94:4145
+[2025-11-18 08:42:37] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:37] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-18 08:42:42] ✗ Proxy health check failed: socks4://72.195.34.60:27391 - Error: Failed to connect to 72.195.34.60 port 27391 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:42] ✗ Marked proxy as DEAD: socks4://72.195.34.60:27391
+[2025-11-18 08:42:47] ✗ Proxy health check failed: socks4://192.111.138.29:4145 - Error: Failed to connect to 192.111.138.29 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:47] ✗ Marked proxy as DEAD: socks4://192.111.138.29:4145
+[2025-11-18 08:42:52] ✗ Proxy health check failed: socks4://49.0.246.130:443 - Error: Failed to connect to 49.0.246.130 port 443 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:52] ✗ Marked proxy as DEAD: socks4://49.0.246.130:443
+[2025-11-18 08:42:57] ✗ Proxy health check failed: socks4://192.111.134.10:4145 - Error: Failed to connect to 192.111.134.10 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:42:57] ✗ Marked proxy as DEAD: socks4://192.111.134.10:4145
+[2025-11-18 08:43:02] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Failed to connect to 181.28.137.18 port 5678 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:02] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-18 08:43:07] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Failed to connect to 123.231.230.58 port 31196 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:07] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-18 08:43:12] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Failed to connect to 218.26.101.226 port 53813 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:12] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-18 08:43:17] ✗ Proxy health check failed: socks4://192.252.209.155:14455 - Error: Failed to connect to 192.252.209.155 port 14455 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:17] ✗ Marked proxy as DEAD: socks4://192.252.209.155:14455
+[2025-11-18 08:43:22] ✗ Proxy health check failed: socks4://98.188.47.150:4145 - Error: Failed to connect to 98.188.47.150 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:22] ✗ Marked proxy as DEAD: socks4://98.188.47.150:4145
+[2025-11-18 08:43:27] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: Failed to connect to 77.241.20.215 port 55915 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:27] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-18 08:43:33] ✗ Proxy health check failed: socks4://198.8.94.170:4145 - Error: Failed to connect to 198.8.94.170 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:43:33] ✗ Marked proxy as DEAD: socks4://198.8.94.170:4145
+[2025-11-18 08:50:03] Loaded 57 proxies from file
+[2025-11-18 08:50:23] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:50:23] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-18 08:56:41] Loaded 57 proxies from file
+[2025-11-18 08:56:46] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Failed to connect to 185.88.177.197 port 8080 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:56:46] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-18 08:56:51] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Failed to connect to 219.65.73.81 port 80 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:56:51] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-18 08:56:56] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Failed to connect to 192.252.208.70 port 14282 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:56:56] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-18 08:57:01] ✗ Proxy health check failed: socks5://184.178.172.23:4145 - Error: Failed to connect to 184.178.172.23 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:01] ✗ Marked proxy as DEAD: socks5://184.178.172.23:4145
+[2025-11-18 08:57:06] ✗ Proxy health check failed: socks5://199.102.106.94:4145 - Error: Failed to connect to 199.102.106.94 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:06] ✗ Marked proxy as DEAD: socks5://199.102.106.94:4145
+[2025-11-18 08:57:11] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Failed to connect to 94.181.33.149 port 40840 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:11] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-18 08:57:16] ✗ Proxy health check failed: socks4://72.195.34.60:27391 - Error: Failed to connect to 72.195.34.60 port 27391 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:16] ✗ Marked proxy as DEAD: socks4://72.195.34.60:27391
+[2025-11-18 08:57:21] ✗ Proxy health check failed: socks4://192.111.138.29:4145 - Error: Failed to connect to 192.111.138.29 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:21] ✗ Marked proxy as DEAD: socks4://192.111.138.29:4145
+[2025-11-18 08:57:26] ✗ Proxy health check failed: socks4://49.0.246.130:443 - Error: Failed to connect to 49.0.246.130 port 443 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:26] ✗ Marked proxy as DEAD: socks4://49.0.246.130:443
+[2025-11-18 08:57:31] ✗ Proxy health check failed: socks4://192.111.134.10:4145 - Error: Failed to connect to 192.111.134.10 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:31] ✗ Marked proxy as DEAD: socks4://192.111.134.10:4145
+[2025-11-18 08:57:36] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Failed to connect to 181.28.137.18 port 5678 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:36] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-18 08:57:41] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Failed to connect to 123.231.230.58 port 31196 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:41] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-18 08:57:46] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Failed to connect to 218.26.101.226 port 53813 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:46] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-18 08:57:51] ✗ Proxy health check failed: socks4://192.252.209.155:14455 - Error: Failed to connect to 192.252.209.155 port 14455 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:51] ✗ Marked proxy as DEAD: socks4://192.252.209.155:14455
+[2025-11-18 08:57:56] ✗ Proxy health check failed: socks4://98.188.47.150:4145 - Error: Failed to connect to 98.188.47.150 port 4145 after 5002 ms: Timeout was reached (Code: 28)
+[2025-11-18 08:57:56] ✗ Marked proxy as DEAD: socks4://98.188.47.150:4145
+[2025-11-20 04:55:31] Loaded 57 proxies from file
+[2025-11-20 04:55:48] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-20 04:55:48] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-20 04:55:49] ✓ Proxy health check passed: http://219.65.73.81:80 (1.5265719890594s)
+[2025-11-20 04:55:51] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 04:55:51] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-20 04:55:53] ✗ Proxy health check failed: socks5://184.178.172.23:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 04:55:53] ✗ Marked proxy as DEAD: socks5://184.178.172.23:4145
+[2025-11-20 04:55:54] ✗ Proxy health check failed: socks5://199.102.106.94:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 04:55:54] ✗ Marked proxy as DEAD: socks5://199.102.106.94:4145
+[2025-11-20 04:55:59] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:55:59] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-20 04:55:59] ✗ Proxy health check failed: socks4://72.195.34.60:27391 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:55:59] ✗ Marked proxy as DEAD: socks4://72.195.34.60:27391
+[2025-11-20 04:55:59] ✗ Proxy health check failed: socks4://192.111.138.29:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:55:59] ✗ Marked proxy as DEAD: socks4://192.111.138.29:4145
+[2025-11-20 04:56:00] ✗ Proxy health check failed: socks4://49.0.246.130:443 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:00] ✗ Marked proxy as DEAD: socks4://49.0.246.130:443
+[2025-11-20 04:56:00] ✗ Proxy health check failed: socks4://192.111.134.10:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:00] ✗ Marked proxy as DEAD: socks4://192.111.134.10:4145
+[2025-11-20 04:56:05] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:05] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-20 04:56:10] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:10] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-20 04:56:15] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:15] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-20 04:56:15] ✗ Proxy health check failed: socks4://192.252.209.155:14455 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:15] ✗ Marked proxy as DEAD: socks4://192.252.209.155:14455
+[2025-11-20 04:56:16] ✗ Proxy health check failed: socks4://98.188.47.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:16] ✗ Marked proxy as DEAD: socks4://98.188.47.150:4145
+[2025-11-20 04:56:21] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:21] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-20 04:56:21] ✗ Proxy health check failed: socks4://198.8.94.170:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:21] ✗ Marked proxy as DEAD: socks4://198.8.94.170:4145
+[2025-11-20 04:56:21] ✗ Proxy health check failed: socks4://184.178.172.14:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:21] ✗ Marked proxy as DEAD: socks4://184.178.172.14:4145
+[2025-11-20 04:56:26] ✗ Proxy health check failed: socks4://190.109.72.41:33633 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:26] ✗ Marked proxy as DEAD: socks4://190.109.72.41:33633
+[2025-11-20 04:56:27] ✗ Proxy health check failed: socks4://192.111.137.35:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:27] ✗ Marked proxy as DEAD: socks4://192.111.137.35:4145
+[2025-11-20 04:56:27] ✗ Proxy health check failed: socks4://174.77.111.197:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:27] ✗ Marked proxy as DEAD: socks4://174.77.111.197:4145
+[2025-11-20 04:56:28] ✗ Proxy health check failed: socks4://184.181.217.210:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:28] ✗ Marked proxy as DEAD: socks4://184.181.217.210:4145
+[2025-11-20 04:56:28] ✗ Proxy health check failed: socks4://192.252.215.5:16137 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:28] ✗ Marked proxy as DEAD: socks4://192.252.215.5:16137
+[2025-11-20 04:56:29] ✗ Proxy health check failed: socks4://192.111.139.165:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:29] ✗ Marked proxy as DEAD: socks4://192.111.139.165:4145
+[2025-11-20 04:56:29] ✗ Proxy health check failed: socks4://174.64.199.82:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:29] ✗ Marked proxy as DEAD: socks4://174.64.199.82:4145
+[2025-11-20 04:56:29] ✗ Proxy health check failed: socks4://192.111.130.2:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:30] ✗ Marked proxy as DEAD: socks4://192.111.130.2:4145
+[2025-11-20 04:56:32] ✓ Proxy health check passed: http://8.220.204.92:1088 (2.5142900943756s)
+[2025-11-20 04:56:35] ✓ Proxy health check passed: http://8.220.204.215:6969 (2.3202199935913s)
+[2025-11-20 04:56:35] ✓ Proxy health check passed: http://192.73.244.36:80 (0.61880898475647s)
+[2025-11-20 04:56:36] ✓ Proxy health check passed: http://89.58.55.33:80 (0.4302020072937s)
+[2025-11-20 04:56:36] ✗ Proxy health check failed: socks4://107.181.168.145:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:36] ✗ Marked proxy as DEAD: socks4://107.181.168.145:4145
+[2025-11-20 04:56:37] ✗ Proxy health check failed: socks4://98.170.57.249:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:37] ✗ Marked proxy as DEAD: socks4://98.170.57.249:4145
+[2025-11-20 04:56:37] ✗ Proxy health check failed: socks4://98.170.57.231:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:37] ✗ Marked proxy as DEAD: socks4://98.170.57.231:4145
+[2025-11-20 04:56:42] ✗ Proxy health check failed: socks4://47.253.214.60:1080 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 04:56:42] ✗ Marked proxy as DEAD: socks4://47.253.214.60:1080
+[2025-11-20 04:56:47] ✗ Proxy health check failed: socks4://138.255.240.66:40736 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:47] ✗ Marked proxy as DEAD: socks4://138.255.240.66:40736
+[2025-11-20 04:56:47] ✗ Proxy health check failed: socks4://8.213.129.20:8888 - Error: Failed to connect to 8.213.129.20 port 8888: Connection refused (Code: 7)
+[2025-11-20 04:56:47] ✗ Marked proxy as DEAD: socks4://8.213.129.20:8888
+[2025-11-20 04:56:48] ✗ Proxy health check failed: socks5h://46.3.63.7:5433:5k05ct880j2d - Error: User was rejected by the SOCKS5 server (1 1). (Code: 7)
+[2025-11-20 04:56:48] ✗ Marked proxy as DEAD: socks5h://46.3.63.7:5433:5k05ct880j2d
+[2025-11-20 04:56:49] ✓ Proxy health check passed: http://124.108.6.20:8085 (0.5362811088562s)
+[2025-11-20 04:56:49] ✗ Proxy health check failed: socks4://110.238.116.82:8015 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:49] ✗ Marked proxy as DEAD: socks4://110.238.116.82:8015
+[2025-11-20 04:56:54] ✗ Proxy health check failed: socks4://185.32.4.102:4153 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 04:56:54] ✗ Marked proxy as DEAD: socks4://185.32.4.102:4153
+[2025-11-20 04:56:59] ✗ Proxy health check failed: socks4://197.232.43.224:1080 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:56:59] ✗ Marked proxy as DEAD: socks4://197.232.43.224:1080
+[2025-11-20 04:56:59] ✗ Proxy health check failed: socks4://67.201.33.10:25283 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:56:59] ✗ Marked proxy as DEAD: socks4://67.201.33.10:25283
+[2025-11-20 04:57:04] ✗ Proxy health check failed: socks5://113.160.188.21:1080 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:57:04] ✗ Marked proxy as DEAD: socks5://113.160.188.21:1080
+[2025-11-20 04:57:05] ✗ Proxy health check failed: socks4://184.178.172.18:15280 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:05] ✗ Marked proxy as DEAD: socks4://184.178.172.18:15280
+[2025-11-20 04:57:10] ✗ Proxy health check failed: socks4://190.144.224.182:44550 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:57:10] ✗ Marked proxy as DEAD: socks4://190.144.224.182:44550
+[2025-11-20 04:57:10] ✗ Proxy health check failed: socks4://72.195.34.41:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:10] ✗ Marked proxy as DEAD: socks4://72.195.34.41:4145
+[2025-11-20 04:57:11] ✗ Proxy health check failed: socks4://181.15.154.154:52033 - Error: Failed to connect to 181.15.154.154 port 52033: Connection refused (Code: 7)
+[2025-11-20 04:57:11] ✗ Marked proxy as DEAD: socks4://181.15.154.154:52033
+[2025-11-20 04:57:11] ✗ Proxy health check failed: socks4://192.111.129.145:16894 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:11] ✗ Marked proxy as DEAD: socks4://192.111.129.145:16894
+[2025-11-20 04:57:11] ✗ Proxy health check failed: socks4://72.195.34.58:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:11] ✗ Marked proxy as DEAD: socks4://72.195.34.58:4145
+[2025-11-20 04:57:12] ✗ Proxy health check failed: socks4://200.41.182.243:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:12] ✗ Marked proxy as DEAD: socks4://200.41.182.243:4145
+[2025-11-20 04:57:12] ✗ Proxy health check failed: socks4://192.111.139.162:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:12] ✗ Marked proxy as DEAD: socks4://192.111.139.162:4145
+[2025-11-20 04:57:13] ✗ Proxy health check failed: socks4://192.111.129.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 04:57:13] ✗ Marked proxy as DEAD: socks4://192.111.129.150:4145
+[2025-11-20 04:57:13] ✗ Proxy health check failed: http://8.213.129.20:5566 - Error: Failed to connect to 8.213.129.20 port 5566: Connection refused (Code: 7)
+[2025-11-20 04:57:13] ✗ Marked proxy as DEAD: http://8.213.129.20:5566
+[2025-11-20 04:57:16] ✓ Proxy health check passed: http://47.90.149.238:202 (2.8133928775787s)
+[2025-11-20 04:57:16] ✓ Proxy health check passed: http://219.65.73.81:80 (0.50870299339294s)
+[2025-11-20 04:57:22] ✗ Proxy health check failed: http://8.220.204.92:1088 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:57:22] ✗ Marked proxy as DEAD: http://8.220.204.92:1088
+[2025-11-20 04:57:27] ✗ Proxy health check failed: http://8.220.204.215:6969 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 04:57:27] ✗ Marked proxy as DEAD: http://8.220.204.215:6969
+[2025-11-20 04:57:28] ✓ Proxy health check passed: http://192.73.244.36:80 (0.67093396186829s)
+[2025-11-20 05:26:14] Loaded 57 proxies from file
+[2025-11-20 05:26:30] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Empty reply from server (Code: 52)
+[2025-11-20 05:26:30] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-20 05:26:31] ✓ Proxy health check passed: http://219.65.73.81:80 (0.66030788421631s)
+[2025-11-20 05:26:32] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 05:26:32] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-20 05:26:34] ✗ Proxy health check failed: socks5://184.178.172.23:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 05:26:34] ✗ Marked proxy as DEAD: socks5://184.178.172.23:4145
+[2025-11-20 05:26:35] ✗ Proxy health check failed: socks5://199.102.106.94:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 05:26:35] ✗ Marked proxy as DEAD: socks5://199.102.106.94:4145
+[2025-11-20 05:26:40] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 05:26:40] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-20 05:26:40] ✗ Proxy health check failed: socks4://72.195.34.60:27391 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:40] ✗ Marked proxy as DEAD: socks4://72.195.34.60:27391
+[2025-11-20 05:26:41] ✗ Proxy health check failed: socks4://192.111.138.29:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:41] ✗ Marked proxy as DEAD: socks4://192.111.138.29:4145
+[2025-11-20 05:26:41] ✗ Proxy health check failed: socks4://49.0.246.130:443 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:41] ✗ Marked proxy as DEAD: socks4://49.0.246.130:443
+[2025-11-20 05:26:41] ✗ Proxy health check failed: socks4://192.111.134.10:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:41] ✗ Marked proxy as DEAD: socks4://192.111.134.10:4145
+[2025-11-20 05:26:46] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 05:26:46] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-20 05:26:51] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:26:51] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-20 05:26:56] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 05:26:56] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-20 05:26:57] ✗ Proxy health check failed: socks4://192.252.209.155:14455 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:57] ✗ Marked proxy as DEAD: socks4://192.252.209.155:14455
+[2025-11-20 05:26:57] ✗ Proxy health check failed: socks4://98.188.47.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:26:57] ✗ Marked proxy as DEAD: socks4://98.188.47.150:4145
+[2025-11-20 05:27:02] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:02] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-20 05:27:02] ✗ Proxy health check failed: socks4://198.8.94.170:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:02] ✗ Marked proxy as DEAD: socks4://198.8.94.170:4145
+[2025-11-20 05:27:03] ✗ Proxy health check failed: socks4://184.178.172.14:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:03] ✗ Marked proxy as DEAD: socks4://184.178.172.14:4145
+[2025-11-20 05:27:08] ✗ Proxy health check failed: socks4://190.109.72.41:33633 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:08] ✗ Marked proxy as DEAD: socks4://190.109.72.41:33633
+[2025-11-20 05:27:08] ✗ Proxy health check failed: socks4://192.111.137.35:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:08] ✗ Marked proxy as DEAD: socks4://192.111.137.35:4145
+[2025-11-20 05:27:09] ✗ Proxy health check failed: socks4://174.77.111.197:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:09] ✗ Marked proxy as DEAD: socks4://174.77.111.197:4145
+[2025-11-20 05:27:09] ✗ Proxy health check failed: socks4://184.181.217.210:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:09] ✗ Marked proxy as DEAD: socks4://184.181.217.210:4145
+[2025-11-20 05:27:09] ✗ Proxy health check failed: socks4://192.252.215.5:16137 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:09] ✗ Marked proxy as DEAD: socks4://192.252.215.5:16137
+[2025-11-20 05:27:10] ✗ Proxy health check failed: socks4://192.111.139.165:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:10] ✗ Marked proxy as DEAD: socks4://192.111.139.165:4145
+[2025-11-20 05:27:10] ✗ Proxy health check failed: socks4://174.64.199.82:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:10] ✗ Marked proxy as DEAD: socks4://174.64.199.82:4145
+[2025-11-20 05:27:11] ✗ Proxy health check failed: socks4://192.111.130.2:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:11] ✗ Marked proxy as DEAD: socks4://192.111.130.2:4145
+[2025-11-20 05:27:13] ✓ Proxy health check passed: http://8.220.204.92:1088 (2.4738440513611s)
+[2025-11-20 05:27:14] ✗ Proxy health check failed: http://8.220.204.215:6969 - Error: Empty reply from server (Code: 52)
+[2025-11-20 05:27:14] ✗ Marked proxy as DEAD: http://8.220.204.215:6969
+[2025-11-20 05:27:14] ✓ Proxy health check passed: http://192.73.244.36:80 (0.64120507240295s)
+[2025-11-20 05:27:15] ✓ Proxy health check passed: http://89.58.55.33:80 (0.63129806518555s)
+[2025-11-20 05:27:15] ✗ Proxy health check failed: socks4://107.181.168.145:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:15] ✗ Marked proxy as DEAD: socks4://107.181.168.145:4145
+[2025-11-20 05:27:16] ✗ Proxy health check failed: socks4://98.170.57.249:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:16] ✗ Marked proxy as DEAD: socks4://98.170.57.249:4145
+[2025-11-20 05:27:16] ✗ Proxy health check failed: socks4://98.170.57.231:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:16] ✗ Marked proxy as DEAD: socks4://98.170.57.231:4145
+[2025-11-20 05:27:21] ✗ Proxy health check failed: socks4://47.253.214.60:1080 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:21] ✗ Marked proxy as DEAD: socks4://47.253.214.60:1080
+[2025-11-20 05:27:26] ✗ Proxy health check failed: socks4://138.255.240.66:40736 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:26] ✗ Marked proxy as DEAD: socks4://138.255.240.66:40736
+[2025-11-20 05:27:26] ✗ Proxy health check failed: socks4://8.213.129.20:8888 - Error: Failed to connect to 8.213.129.20 port 8888: Connection refused (Code: 7)
+[2025-11-20 05:27:26] ✗ Marked proxy as DEAD: socks4://8.213.129.20:8888
+[2025-11-20 05:27:27] ✗ Proxy health check failed: socks5h://46.3.63.7:5433:5k05ct880j2d - Error: User was rejected by the SOCKS5 server (1 1). (Code: 7)
+[2025-11-20 05:27:27] ✗ Marked proxy as DEAD: socks5h://46.3.63.7:5433:5k05ct880j2d
+[2025-11-20 05:27:28] ✓ Proxy health check passed: http://124.108.6.20:8085 (0.63102602958679s)
+[2025-11-20 05:27:28] ✗ Proxy health check failed: socks4://110.238.116.82:8015 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:28] ✗ Marked proxy as DEAD: socks4://110.238.116.82:8015
+[2025-11-20 05:27:33] ✗ Proxy health check failed: socks4://185.32.4.102:4153 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:33] ✗ Marked proxy as DEAD: socks4://185.32.4.102:4153
+[2025-11-20 05:27:38] ✗ Proxy health check failed: socks4://197.232.43.224:1080 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:38] ✗ Marked proxy as DEAD: socks4://197.232.43.224:1080
+[2025-11-20 05:27:39] ✗ Proxy health check failed: socks4://67.201.33.10:25283 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:39] ✗ Marked proxy as DEAD: socks4://67.201.33.10:25283
+[2025-11-20 05:27:44] ✗ Proxy health check failed: socks5://113.160.188.21:1080 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 05:27:44] ✗ Marked proxy as DEAD: socks5://113.160.188.21:1080
+[2025-11-20 05:27:44] ✗ Proxy health check failed: socks4://184.178.172.18:15280 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:44] ✗ Marked proxy as DEAD: socks4://184.178.172.18:15280
+[2025-11-20 05:27:49] ✗ Proxy health check failed: socks4://190.144.224.182:44550 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 05:27:49] ✗ Marked proxy as DEAD: socks4://190.144.224.182:44550
+[2025-11-20 05:27:49] ✗ Proxy health check failed: socks4://72.195.34.41:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:49] ✗ Marked proxy as DEAD: socks4://72.195.34.41:4145
+[2025-11-20 05:27:50] ✗ Proxy health check failed: socks4://181.15.154.154:52033 - Error: Failed to connect to 181.15.154.154 port 52033: Connection refused (Code: 7)
+[2025-11-20 05:27:50] ✗ Marked proxy as DEAD: socks4://181.15.154.154:52033
+[2025-11-20 05:27:50] ✗ Proxy health check failed: socks4://192.111.129.145:16894 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:50] ✗ Marked proxy as DEAD: socks4://192.111.129.145:16894
+[2025-11-20 05:27:51] ✗ Proxy health check failed: socks4://72.195.34.58:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:51] ✗ Marked proxy as DEAD: socks4://72.195.34.58:4145
+[2025-11-20 05:27:51] ✗ Proxy health check failed: socks4://200.41.182.243:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:51] ✗ Marked proxy as DEAD: socks4://200.41.182.243:4145
+[2025-11-20 05:27:52] ✗ Proxy health check failed: socks4://192.111.139.162:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:52] ✗ Marked proxy as DEAD: socks4://192.111.139.162:4145
+[2025-11-20 05:27:52] ✗ Proxy health check failed: socks4://192.111.129.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 05:27:52] ✗ Marked proxy as DEAD: socks4://192.111.129.150:4145
+[2025-11-20 05:27:52] ✗ Proxy health check failed: http://8.213.129.20:5566 - Error: Failed to connect to 8.213.129.20 port 5566: Connection refused (Code: 7)
+[2025-11-20 05:27:52] ✗ Marked proxy as DEAD: http://8.213.129.20:5566
+[2025-11-20 05:27:55] ✓ Proxy health check passed: http://47.90.149.238:202 (2.682412147522s)
+[2025-11-20 05:27:59] ✓ Proxy health check passed: http://219.65.73.81:80 (4.4839360713959s)
+[2025-11-20 05:28:04] ✗ Proxy health check failed: http://8.220.204.92:1088 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 05:28:04] ✗ Marked proxy as DEAD: http://8.220.204.92:1088
+[2025-11-20 05:28:05] ✓ Proxy health check passed: http://192.73.244.36:80 (0.59078693389893s)
+[2025-11-20 05:28:06] ✓ Proxy health check passed: http://89.58.55.33:80 (0.42914605140686s)
+[2025-11-20 06:10:38] Loaded 57 proxies from file
+[2025-11-20 06:10:55] ✗ Proxy health check failed: http://185.88.177.197:8080 - Error: Empty reply from server (Code: 52)
+[2025-11-20 06:10:55] ✗ Marked proxy as DEAD: http://185.88.177.197:8080
+[2025-11-20 06:10:58] ✓ Proxy health check passed: http://219.65.73.81:80 (2.6177980899811s)
+[2025-11-20 06:11:00] ✗ Proxy health check failed: socks5://192.252.208.70:14282 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 06:11:00] ✗ Marked proxy as DEAD: socks5://192.252.208.70:14282
+[2025-11-20 06:11:01] ✗ Proxy health check failed: socks5://184.178.172.23:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 06:11:01] ✗ Marked proxy as DEAD: socks5://184.178.172.23:4145
+[2025-11-20 06:11:02] ✗ Proxy health check failed: socks5://199.102.106.94:4145 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (3) (Code: 7)
+[2025-11-20 06:11:02] ✗ Marked proxy as DEAD: socks5://199.102.106.94:4145
+[2025-11-20 06:11:07] ✗ Proxy health check failed: socks4://94.181.33.149:40840 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:11:07] ✗ Marked proxy as DEAD: socks4://94.181.33.149:40840
+[2025-11-20 06:11:07] ✗ Proxy health check failed: socks4://72.195.34.60:27391 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:07] ✗ Marked proxy as DEAD: socks4://72.195.34.60:27391
+[2025-11-20 06:11:08] ✗ Proxy health check failed: socks4://192.111.138.29:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:08] ✗ Marked proxy as DEAD: socks4://192.111.138.29:4145
+[2025-11-20 06:11:08] ✗ Proxy health check failed: socks4://49.0.246.130:443 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:08] ✗ Marked proxy as DEAD: socks4://49.0.246.130:443
+[2025-11-20 06:11:09] ✗ Proxy health check failed: socks4://192.111.134.10:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:09] ✗ Marked proxy as DEAD: socks4://192.111.134.10:4145
+[2025-11-20 06:11:12] ✗ Proxy health check failed: socks4://181.28.137.18:5678 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:12] ✗ Marked proxy as DEAD: socks4://181.28.137.18:5678
+[2025-11-20 06:11:17] ✗ Proxy health check failed: socks4://123.231.230.58:31196 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 06:11:17] ✗ Marked proxy as DEAD: socks4://123.231.230.58:31196
+[2025-11-20 06:11:22] ✗ Proxy health check failed: socks4://218.26.101.226:53813 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 06:11:22] ✗ Marked proxy as DEAD: socks4://218.26.101.226:53813
+[2025-11-20 06:11:23] ✗ Proxy health check failed: socks4://192.252.209.155:14455 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:23] ✗ Marked proxy as DEAD: socks4://192.252.209.155:14455
+[2025-11-20 06:11:23] ✗ Proxy health check failed: socks4://98.188.47.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:23] ✗ Marked proxy as DEAD: socks4://98.188.47.150:4145
+[2025-11-20 06:11:24] ✗ Proxy health check failed: socks4://77.241.20.215:55915 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:24] ✗ Marked proxy as DEAD: socks4://77.241.20.215:55915
+[2025-11-20 06:11:25] ✗ Proxy health check failed: socks4://198.8.94.170:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:25] ✗ Marked proxy as DEAD: socks4://198.8.94.170:4145
+[2025-11-20 06:11:26] ✗ Proxy health check failed: socks4://184.178.172.14:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:26] ✗ Marked proxy as DEAD: socks4://184.178.172.14:4145
+[2025-11-20 06:11:31] ✗ Proxy health check failed: socks4://190.109.72.41:33633 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 06:11:31] ✗ Marked proxy as DEAD: socks4://190.109.72.41:33633
+[2025-11-20 06:11:32] ✗ Proxy health check failed: socks4://192.111.137.35:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:32] ✗ Marked proxy as DEAD: socks4://192.111.137.35:4145
+[2025-11-20 06:11:32] ✗ Proxy health check failed: socks4://174.77.111.197:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:32] ✗ Marked proxy as DEAD: socks4://174.77.111.197:4145
+[2025-11-20 06:11:32] ✗ Proxy health check failed: socks4://184.181.217.210:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:32] ✗ Marked proxy as DEAD: socks4://184.181.217.210:4145
+[2025-11-20 06:11:33] ✗ Proxy health check failed: socks4://192.252.215.5:16137 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:33] ✗ Marked proxy as DEAD: socks4://192.252.215.5:16137
+[2025-11-20 06:11:33] ✗ Proxy health check failed: socks4://192.111.139.165:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:33] ✗ Marked proxy as DEAD: socks4://192.111.139.165:4145
+[2025-11-20 06:11:34] ✗ Proxy health check failed: socks4://174.64.199.82:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:34] ✗ Marked proxy as DEAD: socks4://174.64.199.82:4145
+[2025-11-20 06:11:34] ✗ Proxy health check failed: socks4://192.111.130.2:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:34] ✗ Marked proxy as DEAD: socks4://192.111.130.2:4145
+[2025-11-20 06:11:37] ✓ Proxy health check passed: http://8.220.204.92:1088 (2.7807159423828s)
+[2025-11-20 06:11:40] ✓ Proxy health check passed: http://8.220.204.215:6969 (2.4079449176788s)
+[2025-11-20 06:11:40] ✓ Proxy health check passed: http://192.73.244.36:80 (0.6228289604187s)
+[2025-11-20 06:11:41] ✓ Proxy health check passed: http://89.58.55.33:80 (0.63860821723938s)
+[2025-11-20 06:11:41] ✗ Proxy health check failed: socks4://107.181.168.145:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:41] ✗ Marked proxy as DEAD: socks4://107.181.168.145:4145
+[2025-11-20 06:11:41] ✗ Proxy health check failed: socks4://98.170.57.249:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:41] ✗ Marked proxy as DEAD: socks4://98.170.57.249:4145
+[2025-11-20 06:11:42] ✗ Proxy health check failed: socks4://98.170.57.231:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:42] ✗ Marked proxy as DEAD: socks4://98.170.57.231:4145
+[2025-11-20 06:11:47] ✗ Proxy health check failed: socks4://47.253.214.60:1080 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:11:47] ✗ Marked proxy as DEAD: socks4://47.253.214.60:1080
+[2025-11-20 06:11:52] ✗ Proxy health check failed: socks4://138.255.240.66:40736 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:11:52] ✗ Marked proxy as DEAD: socks4://138.255.240.66:40736
+[2025-11-20 06:11:52] ✗ Proxy health check failed: socks4://8.213.129.20:8888 - Error: Failed to connect to 8.213.129.20 port 8888: Connection refused (Code: 7)
+[2025-11-20 06:11:52] ✗ Marked proxy as DEAD: socks4://8.213.129.20:8888
+[2025-11-20 06:11:53] ✗ Proxy health check failed: socks5h://46.3.63.7:5433:5k05ct880j2d - Error: User was rejected by the SOCKS5 server (1 1). (Code: 7)
+[2025-11-20 06:11:53] ✗ Marked proxy as DEAD: socks5h://46.3.63.7:5433:5k05ct880j2d
+[2025-11-20 06:11:58] ✗ Proxy health check failed: http://124.108.6.20:8085 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:11:58] ✗ Marked proxy as DEAD: http://124.108.6.20:8085
+[2025-11-20 06:11:58] ✗ Proxy health check failed: socks4://110.238.116.82:8015 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:11:58] ✗ Marked proxy as DEAD: socks4://110.238.116.82:8015
+[2025-11-20 06:12:03] ✗ Proxy health check failed: socks4://185.32.4.102:4153 - Error: Connection timed out after 5002 milliseconds (Code: 28)
+[2025-11-20 06:12:03] ✗ Marked proxy as DEAD: socks4://185.32.4.102:4153
+[2025-11-20 06:12:08] ✗ Proxy health check failed: socks4://197.232.43.224:1080 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:12:08] ✗ Marked proxy as DEAD: socks4://197.232.43.224:1080
+[2025-11-20 06:12:09] ✗ Proxy health check failed: socks4://67.201.33.10:25283 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:09] ✗ Marked proxy as DEAD: socks4://67.201.33.10:25283
+[2025-11-20 06:12:13] ✗ Proxy health check failed: socks5://113.160.188.21:1080 - Error: Can't complete SOCKS5 connection to 64:ff9b::d05f:7001:80. (1) (Code: 7)
+[2025-11-20 06:12:13] ✗ Marked proxy as DEAD: socks5://113.160.188.21:1080
+[2025-11-20 06:12:13] ✗ Proxy health check failed: socks4://184.178.172.18:15280 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:13] ✗ Marked proxy as DEAD: socks4://184.178.172.18:15280
+[2025-11-20 06:12:18] ✗ Proxy health check failed: socks4://190.144.224.182:44550 - Error: Connection timed out after 5000 milliseconds (Code: 28)
+[2025-11-20 06:12:18] ✗ Marked proxy as DEAD: socks4://190.144.224.182:44550
+[2025-11-20 06:12:18] ✗ Proxy health check failed: socks4://72.195.34.41:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:18] ✗ Marked proxy as DEAD: socks4://72.195.34.41:4145
+[2025-11-20 06:12:19] ✗ Proxy health check failed: socks4://181.15.154.154:52033 - Error: Failed to connect to 181.15.154.154 port 52033: Connection refused (Code: 7)
+[2025-11-20 06:12:19] ✗ Marked proxy as DEAD: socks4://181.15.154.154:52033
+[2025-11-20 06:12:19] ✗ Proxy health check failed: socks4://192.111.129.145:16894 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:19] ✗ Marked proxy as DEAD: socks4://192.111.129.145:16894
+[2025-11-20 06:12:20] ✗ Proxy health check failed: socks4://72.195.34.58:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:20] ✗ Marked proxy as DEAD: socks4://72.195.34.58:4145
+[2025-11-20 06:12:20] ✗ Proxy health check failed: socks4://200.41.182.243:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:20] ✗ Marked proxy as DEAD: socks4://200.41.182.243:4145
+[2025-11-20 06:12:21] ✗ Proxy health check failed: socks4://192.111.139.162:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:21] ✗ Marked proxy as DEAD: socks4://192.111.139.162:4145
+[2025-11-20 06:12:21] ✗ Proxy health check failed: socks4://192.111.129.150:4145 - Error: SOCKS4 connection to 64:ff9b::d05f:7001 not supported
+ (Code: 6)
+[2025-11-20 06:12:21] ✗ Marked proxy as DEAD: socks4://192.111.129.150:4145
+[2025-11-20 06:12:21] ✗ Proxy health check failed: http://8.213.129.20:5566 - Error: Failed to connect to 8.213.129.20 port 5566: Connection refused (Code: 7)
+[2025-11-20 06:12:21] ✗ Marked proxy as DEAD: http://8.213.129.20:5566
+[2025-11-20 06:12:22] ✗ Proxy health check failed: http://47.90.149.238:202 - Error: Recv failure: Connection reset by peer (Code: 56)
+[2025-11-20 06:12:22] ✗ Marked proxy as DEAD: http://47.90.149.238:202
+[2025-11-20 06:12:27] ✗ Proxy health check failed: http://219.65.73.81:80 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:12:27] ✗ Marked proxy as DEAD: http://219.65.73.81:80
+[2025-11-20 06:12:32] ✗ Proxy health check failed: http://8.220.204.92:1088 - Error: Connection timed out after 5001 milliseconds (Code: 28)
+[2025-11-20 06:12:32] ✗ Marked proxy as DEAD: http://8.220.204.92:1088
+[2025-11-20 06:12:34] ✗ Proxy health check failed: http://8.220.204.215:6969 - Error: Empty reply from server (Code: 52)
+[2025-11-20 06:12:34] ✗ Marked proxy as DEAD: http://8.220.204.215:6969
+[2025-11-20 06:12:35] ✓ Proxy health check passed: http://192.73.244.36:80 (0.65958499908447s)
+[2025-11-20 06:12:35] ✓ Proxy health check passed: http://89.58.55.33:80 (0.63680005073547s)
+[2025-11-20 06:12:36] ✓ Proxy health check passed: http://192.73.244.36:80 (0.63974809646606s)
+[2025-11-20 06:12:38] ✓ Proxy health check passed: http://89.58.55.33:80 (1.0697858333588s)
