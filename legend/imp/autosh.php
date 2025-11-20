@@ -386,14 +386,14 @@ function runtime_cfg(): array {
     if ($cache !== null) {
         return $cache;
     }
-    // ULTRA-FAST: Optimized for fastest response times
-    // Connect timeout: 3s (balanced for reliability)
-    // Total timeout: 10s (enough for most checkout flows)
-    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 3;   // connect timeout: 3s
-    $to  = isset($_GET['to'])  ? max(5, (int)$_GET['to'])  : 10;  // total timeout: 10s
-    // Sleep between phases reduced to 0.1s for maximum speed
-    // Increase if you experience payment processor timeouts: ?sleep=0.5
-    $slp = isset($_GET['sleep']) ? max(0, (float)$_GET['sleep']) : 0.1; // sleep seconds between phases
+    // HYPER-FAST: Optimized for maximum speed and performance
+    // Connect timeout: 2s (faster connection establishment)
+    // Total timeout: 8s (optimized for fast checkout flows)
+    $cto = isset($_GET['cto']) ? max(1, (int)$_GET['cto']) : 2;   // connect timeout: 2s (reduced from 3s)
+    $to  = isset($_GET['to'])  ? max(5, (int)$_GET['to'])  : 8;   // total timeout: 8s (reduced from 10s)
+    // Sleep between phases reduced to 0.05s for maximum speed
+    // Increase if you experience payment processor timeouts: ?sleep=0.2
+    $slp = isset($_GET['sleep']) ? max(0, (float)$_GET['sleep']) : 0.05; // sleep seconds between phases (reduced from 0.1s)
     $v4  = isset($_GET['v4']) ? (bool)$_GET['v4'] : true; // prefer IPv4
     $fastFail = isset($_GET['fast_fail']) ? (bool)$_GET['fast_fail'] : true;
     $quickAbort = isset($_GET['quick_abort']) ? (bool)$_GET['quick_abort'] : true;
@@ -2378,7 +2378,7 @@ function http_get_with_cf_bypass(string $url, ?string $cookieFile = null, array 
             ]);
             
             // Wait a bit before retry (Cloudflare expects this) - OPTIMIZED for speed
-            usleep(100000); // 0.1 seconds (reduced from 0.5s)
+            usleep(50000); // 0.05 seconds (ultra-fast)
             [$body, $code] = http_get_with_proxy($url, $cookieFile, $cfHeaders, $timeout, $connectTimeout);
             
             // If still challenged, return what we have
@@ -2412,7 +2412,7 @@ function http_get_with_cf_bypass(string $url, ?string $cookieFile = null, array 
         
         $attempt++;
         if ($attempt < $maxRetries) {
-            usleep(100000); // 0.1 seconds between retries (reduced from 0.3s)
+            usleep(50000); // 0.05 seconds between retries (ultra-fast)
         }
     }
     
@@ -3501,7 +3501,7 @@ if ($isCheckoutUrl && $directCheckoutUrl) {
             
             if ($retryCount < $maxRetries) {
                 $retryCount++;
-                usleep(400000); // Wait 0.4 seconds for Cloudflare (optimized)
+                usleep(200000); // Wait 0.2 seconds for Cloudflare (hyper-optimized)
                 goto cart;
             }
         }
@@ -3515,7 +3515,7 @@ if ($isCheckoutUrl && $directCheckoutUrl) {
             } else if ($retryCount < $maxRetries) {
                 curl_close($ch);
                 $retryCount++;
-                usleep(250000); // Wait 0.25 seconds (optimized)
+                usleep(150000); // Wait 0.15 seconds (hyper-optimized)
                 goto cart;
             }
         }
@@ -3657,7 +3657,7 @@ if ($isCheckoutUrl && $directCheckoutUrl) {
             
             if ($retryCount < $maxRetries) {
                 $retryCount++;
-                usleep(400000); // Wait 0.4 seconds for Cloudflare (optimized)
+                usleep(200000); // Wait 0.2 seconds for Cloudflare (hyper-optimized)
                 goto add_to_cart; // Retry with fresh headers
             }
         }
@@ -3672,7 +3672,7 @@ if ($isCheckoutUrl && $directCheckoutUrl) {
                 // If captcha bypass failed, retry once more
                 curl_close($ch);
                 $retryCount++;
-                usleep(250000); // Wait 0.25 seconds (optimized)
+                usleep(150000); // Wait 0.15 seconds (hyper-optimized)
                 goto add_to_cart;
             }
         }
@@ -5296,7 +5296,7 @@ if ($curlErr) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    usleep(200000); // Wait 0.2 seconds before retrying (hyper-optimized)
+    usleep(100000); // Wait 0.1 seconds before retrying (ultra-fast)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
@@ -5305,7 +5305,7 @@ if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
     }
 }
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    usleep(200000); // Wait 0.2 seconds before retrying (hyper-optimized)
+    usleep(100000); // Wait 0.1 seconds before retrying (ultra-fast)
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
