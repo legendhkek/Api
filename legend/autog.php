@@ -103,9 +103,10 @@ if (isset($_GET['use_geocoding']) && $_GET['use_geocoding'] === '1') {
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, 'https://randomuser.me/api/?nat=us');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+curl_setopt($ch, CURLOPT_TIMEOUT, 3); // Reduced from 5 to 3 seconds
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1); // Reduced from 3 to 1 second
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 $resposta = curl_exec($ch);
 curl_close($ch);
 
@@ -182,11 +183,16 @@ if ($site1 === false) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // 10 second timeout
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // 3 second connect timeout
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8); // Reduced from 10 to 8 seconds for faster response
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2); // Reduced from 3 to 2 seconds for faster connection
+    curl_setopt($ch, CURLOPT_ENCODING, ''); // Enable gzip/deflate compression
+    curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Disable Nagle's algorithm for faster response
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'User-Agent: Mozilla/5.0 (Linux; Android 6.0.1; Redmi 3S) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Mobile Safari/537.36',
+        'User-Agent: '.$ua, // Use dynamically generated UA instead of hardcoded
         'Accept: application/json',
+        'Accept-Language: en-US,en;q=0.9',
+        'Accept-Encoding: gzip, deflate',
+        'Cache-Control: no-cache',
     ]);
 
     $r1 = curl_exec($ch);
@@ -211,6 +217,8 @@ if ($site1 === false) {
             $result = json_encode([
                 'Response' => $err,
             ]);
+            echo $result;
+            exit;
         }
     }
 
@@ -240,8 +248,9 @@ curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
 curl_setopt($ch, CURLOPT_HEADER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
-curl_setopt($ch, CURLOPT_TIMEOUT, 15); // Increased timeout for cart/checkout
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 12); // Reduced from 15 to 12 seconds for faster checkout
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // Reduced from 5 to 3 seconds
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 curl_setopt($ch, CURLOPT_ENCODING, ''); // Support gzip/deflate (Cloudflare uses compression)
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -378,9 +387,10 @@ curl_setopt($ch, CURLOPT_URL, 'https://deposit.shopifycs.com/sessions');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+curl_setopt($ch, CURLOPT_TIMEOUT, 8); // Reduced from 10 to 8 seconds
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2); // Reduced from 3 to 2 seconds
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -434,15 +444,16 @@ if (empty($cctoken)) {
 }
 
 proposal:
-usleep(100000); // Reduced from sleep(2) to 0.1 seconds for speed
+usleep(25000); // Further reduced to 0.025s for maximum speed
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=Proposal');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 12); // Reduced from 15 to 12 seconds
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // Reduced from 5 to 3 seconds
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1603,14 +1614,15 @@ elseif ($currencycode == 'NZD') {
 }
     $totalamt = $firstStrategy->runningTotal->value->amount;
 recipt:
-    usleep(100000); // Reduced from sleep(3) to 0.1 seconds for speed
+    usleep(50000); // Further reduced from 0.1s to 0.05s for maximum speed
     $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=SubmitForCompletion');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 12); // Reduced from 15 to 12 seconds
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // Reduced from 5 to 3 seconds
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -1693,14 +1705,15 @@ $postf2 = json_encode([
     'operationName' => 'PollForReceipt'
 
 ]);
-usleep(100000); // Reduced from sleep(3) to 0.1 seconds for speed
+usleep(50000); // Further reduced from 0.1s to 0.05s for maximum speed
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=PollForReceipt');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_TIMEOUT, 12); // Reduced from 15 to 12 seconds
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // Reduced from 5 to 3 seconds
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TCP_NODELAY, true); // Faster response
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -1748,7 +1761,7 @@ if (curl_errno($ch)) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    usleep(200000); // Reduced from sleep(2) to 0.2 seconds for speed
+    usleep(100000); // Reduced to 0.1s for faster processing
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
@@ -1759,7 +1772,7 @@ if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
 }
 
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    usleep(200000); // Reduced from sleep(2) to 0.2 seconds for speed
+    usleep(100000); // Reduced to 0.1s for faster processing
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
