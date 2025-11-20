@@ -13,3 +13,12 @@ cc_responses.txt
 # Test files (if recreated)
 test_*.php
 test_*.sh
+demo_*.php
+debug_*.php
+*_example.php
+
+# Temporary PHP files
+php.php
+
+# Archive files
+*.zip
